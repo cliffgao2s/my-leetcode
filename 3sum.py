@@ -1,5 +1,5 @@
 #https://leetcode-cn.com/problems/3sum/
-
+import time
 # 方法1  提高时间复杂度， 取每一位   然后将剩余作为子问题， A+B = -C，  然后在子问题中只要解出1对A+B符合要求则POP
 # 方法2  迭代记录每一次已经生成过的 SUM2结果
 class Solution(object):
@@ -13,6 +13,8 @@ class Solution(object):
 
         #先计算所有元素22相加的结果，并保存他们的下标
         num2num = dict()
+
+        print(time.time())
 
         for index in range(len(nums) - 1):
             for index1 in range(index + 1, len(nums)):
@@ -31,7 +33,7 @@ class Solution(object):
                     listNew = []
                     listNew.append(temp)
                     num2num[nums[index] + nums[index1]] = listNew
-
+        print(time.time())
 
         for index in range(len(nums) - 2):
             if num2num.__contains__(-nums[index]):
@@ -46,6 +48,7 @@ class Solution(object):
 
                         if temp not in resultList:
                             resultList.append(temp)
+        print(time.time())
 
         return resultList
 
