@@ -43,6 +43,8 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                             if item == attr_list[index_attr]:
                                 col_list.append(index_attr)
                     
+                    primary_key_index = 0
+                    
                     #从文件中将对应col数据读取入MATRIX
                     #2种SQL导出文件，有可能 insert into 是分行，有可能都在1行
                     index += 1
@@ -51,7 +53,7 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                             result = re.findall('(?<=\().*?(?=\))', sql_list[index], flags=0)
                             for item in result:
                                 temp = []
-                                str_list = item.split(',')
+                                str_list = item.split(', ')   #split ,后面加个空格，防止内容里有空格
 
                                 for index_str in range(len(str_list)):
                                     if index_str in col_list:
@@ -59,17 +61,22 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                                         str_temp = str_temp.replace(' ', '')
                                         str_temp = str_temp.replace('\'', '')
                                         if str_temp != 'null':
-                                            temp.append(float(str_temp))
+                                            #主键保存为int类型
+                                            if primary_key_index == index_str:
+                                                temp.append(int(str_temp))
+                                            else:
+                                                temp.append(float(str_temp))
                                         else:
                                             break
-
-                                        data_list.append(temp)
+                                        #只有长度正常的数据才能计入
+                                        if len(temp) == len(col_list):
+                                            data_list.append(temp)
                             index += 1
                         else:
                             break
 
                     #LIST转numpy
-                    np_array = np.asarray(data_list, dtype = float) 
+                    np_array = np.asarray(data_list, dtype=float)
                     result_matrix[table_name] = np_array
                 else:
                     index += 1
@@ -77,6 +84,10 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                 index += 1
 
         return result_matrix
+
+
+def waternark_embed_alg1():
+    pass
 
 
 if __name__ == "__main__":
