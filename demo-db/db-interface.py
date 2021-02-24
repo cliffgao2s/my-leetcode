@@ -1,5 +1,49 @@
 import sys, os, numpy as np, re
 
+#将STR转换为二进制
+def str_2_bin(str_in):
+    return ''.join([bin(ord(c)).replace('0b', '') for c in str_in])
+
+#返回所有可能的字符组合
+def bin_2_str(bin_in):
+      result_list = []
+
+      if bin_in[0] == '0':
+            return result_list
+
+      if len(bin_in) < 6:
+            return result_list
+
+
+      if len(bin_in) == 6:
+            return chr(int(bin_in, 2))
+
+      if len(bin_in) == 7:
+            return chr(int(bin_in, 2))
+
+      if bin_in[6] != '0':
+            #先按6BIT位切分
+            subArr1 = bin_in[0:6]
+            subArr2 = bin_2_str(bin_in[6:])
+
+            str1 = chr(int(subArr1, 2))
+            if len(subArr2) > 0:
+                  for item in subArr2:
+                        result_list.append(str1 + item)
+
+      if bin_in[7] != '0':
+            #再尝试7BIT切分
+            subArr1 = bin_in[0:7]
+            subArr2 = bin_2_str(bin_in[7:])
+
+            str1 = chr(int(subArr1, 2))
+            if len(subArr2) > 0:
+                  for item in subArr2:
+                        result_list.append(str1 + item)
+
+
+      return result_list
+
 def get_sub_attrs(str1):
     str1 = str1.replace('\n', '')
     result = re.search('`.*`', str1).group()
@@ -85,10 +129,30 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
 
         return result_matrix
 
-
-def waternark_embed_alg1():
+#切割数据集，根据secret-key
+def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:{}):
     pass
 
+
+def embed_watermark_bit():
+    pass
+
+
+def waternark_embed_alg1(input_matrix : {}):
+    partition_nums = 10
+    secrect_key = 'sxcqq1233aaa'
+    watermark = 'test360'
+
+    for item in input_matrix:
+        #step1 将数据集分组
+        partition_data_set(partition_nums, secrect_key, input_matrix[item])
+
+        #step2 将水印按BIT位加入,水印只支持  数字 字母 + 常用字符 !等，从ASCII 33开始，保证至少为6位
+        binarr = str_2_bin(watermark)
+
+
+
+    pass
 
 if __name__ == "__main__":
     #入参应该包含需要添加水印的表+可插入误差的COL名(可多选)
@@ -101,4 +165,6 @@ if __name__ == "__main__":
 
     result_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
-    print(result_matrix)
+    waternark_embed_alg1(result_matrix)
+
+
