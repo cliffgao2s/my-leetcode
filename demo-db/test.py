@@ -1,5 +1,5 @@
-import re
-
+import re, numpy as np, hmac
+from numpy import ndarray
 
 #=============================================================================
 '''
@@ -74,6 +74,7 @@ for item in data_dict:
 '''
 
 #=============================================================================
+'''
 watermark:str = 'test360'
 
 binarr = ''.join([bin(ord(c)).replace('0b', '') for c in watermark])
@@ -123,4 +124,29 @@ def bin_2_str(bin_in):
 
 
 print(bin_2_str(binarr))
+'''
+#=============================================================================
+'''
+data:ndarray = np.array([
+		[1,2,3],
+		[4,5,6],
+		[7,8,9],
+		[0,0,0]
+	])
+
+print(data.shape[0])
+'''
+#=============================================================================
+'''
+seckey = 'accadwde!'
+primary = '102'
+
+h = hmac.new(primary.encode('utf-8'), seckey.encode('utf-8'), digestmod='MD5').hexdigest()
+h1 = hmac.new(seckey.encode('utf-8'), h.encode('utf-8'), digestmod='MD5').hexdigest()
+
+
+print(int(h1, 16) % 100)
+'''
+
+#=============================================================================
 

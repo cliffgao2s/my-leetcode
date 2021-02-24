@@ -1,4 +1,5 @@
-import sys, os, numpy as np, re
+import sys, os, numpy as np, re, hmac
+from numpy import ndarray
 
 #将STR转换为二进制
 def str_2_bin(str_in):
@@ -130,29 +131,65 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
         return result_matrix
 
 #切割数据集，根据secret-key
-def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:{}):
+def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarray):
+    sub_sets = []
+
+    for index in range(partition_nums):
+        temp_list = []
+        sub_sets.append(temp_list)
+
+    for index in range(origin_data_set.shape[0]):
+        h1 = hmac.new(str(int(origin_data_set[index][0])).encode('utf-8'), secret_key.encode('utf-8'), digestmod='MD5').hexdigest()
+        h2 = hmac.new(secret_key.encode('utf-8'), h1.encode('utf-8'), digestmod='MD5').hexdigest()
+
+        #计算出数据子集的SLOT，并修改插入
+        slot = int(h2, 16) % partition_nums
+        sub_list = sub_sets[slot]
+        sub_list.append(origin_data_set[index])
+        sub_sets[slot] = sub_list
+
+    result_list = []
+    for item in sub_sets:
+        result_list.append(np.asarray(item))
+
+    return result_list
+
+
+def embed_watermark_bit(bit_val, sub_dataset):
     pass
 
 
-def embed_watermark_bit():
-    pass
-
-
-def waternark_embed_alg1(input_matrix : {}):
-    partition_nums = 10
-    secrect_key = 'sxcqq1233aaa'
-    watermark = 'test360'
+MIN_DATASET_SIZE = 100
+#加入水印
+def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
 
     for item in input_matrix:
+        #step0 计算data set分段数量
+        binarr = str_2_bin(watermark)
+        watermark_len = len(binarr)
+        dataset_origin:ndarray = input_matrix[item]
+
+        #partition_nums = int(dataset_origin.shape[0] / MIN_DATASET_SIZE)
+        partition_nums = 100
+
         #step1 将数据集分组
-        partition_data_set(partition_nums, secrect_key, input_matrix[item])
+        sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
 
         #step2 将水印按BIT位加入,水印只支持  数字 字母 + 常用字符 !等，从ASCII 33开始，保证至少为6位
-        binarr = str_2_bin(watermark)
+        for index in range(len(sub_dataset)):
+            sub_arr:ndarray = sub_dataset[index]
+            #对于超过最小值下限的数据集才嵌入水印，控制误差
+            if sub_arr.shape[0] > MIN_DATASET_SIZE:
+                slot = int(index % watermark_len)
+                embed_watermark_bit(binarr[slot], sub_dataset[index])
+        
+        #step3 将水印数据反写回SQL文件
+        
 
-
-
+#抽取水印,返回所有可能的字母
+def waternark_extract_alg1(input_matrix : {}):
     pass
+
 
 if __name__ == "__main__":
     #入参应该包含需要添加水印的表+可插入误差的COL名(可多选)
@@ -165,6 +202,6 @@ if __name__ == "__main__":
 
     result_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
-    waternark_embed_alg1(result_matrix)
+    waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'test360')
 
 
