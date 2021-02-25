@@ -1,4 +1,4 @@
-import re, numpy as np, hmac
+import re, numpy as np, hmac, random
 from numpy import ndarray
 
 #=============================================================================
@@ -150,3 +150,96 @@ print(int(h1, 16) % 100)
 
 #=============================================================================
 
+MAX_OPTIOM = 1  #求解全局最优的最大解
+MIN_OPTIOM = 2
+
+DISTORTION_BOUND = 1   #误差嵌入类型  1   给出上下界
+DISTORTION_TYPE = 2    #误差嵌入类型  2   给出分段的上下界
+
+REF_RATION = 0.01   #0-1   ref的计算步长
+
+#2个向量的长度一致,外部保证
+def count_mean_and_es_val(data_vector:[], addtion_vector:[]):
+      sum = 0.0
+      for index in range(len(data_vector)):
+            sum += data_vector[index] + addtion_vector[index]
+      
+      mean_val = sum / len(data_vector)
+
+      es_val = 0.0
+
+      for index in range(len(data_vector)):
+            es_val += (data_vector[index] + addtion_vector[index] - mean_val) * (data_vector[index] + addtion_vector[index] - mean_val)
+            
+      return mean_val, es_val
+
+def count_hiding_function_val(ref_val:float, data_vector:[], addtion_vector:[]):
+      sum = 0
+
+      for index in range(len(data_vector)):
+            if data_vector[index] + addtion_vector[index] >= ref_val:
+                  sum += 1 
+
+      return sum / len(data_vector)
+
+#模式搜索最优化
+def pattern_search_optiom_with_range(optim_type:int, data_vector:[], addtion_vector:[], constrain_set:[]):
+
+      delta_vetor = []
+
+      mean_val, es_val = count_mean_and_es_val(data_vector, addtion_vector)
+
+      ref_val = mean_val + REF_RATION * es_val
+
+      temp_tao_val = count_hiding_function_val(ref_val, data_vector, addtion_vector)
+
+      
+
+      return delta_vetor
+
+#方式2   给出各个数据的范围，在各自的type范围内变动
+def pattern_search_optiom_with_types():
+      pass
+
+
+
+def count_insert_vector(optim_type, distortion_type, data_vector, constrain_set):
+      #初始化的嵌入量向量，默认为全0
+      addtion_vector = []
+      for item in data_vector:
+            addtion_vector.append(0)
+
+      if distortion_type == DISTORTION_BOUND:
+            delta_vetor = pattern_search_optiom_with_range(optim_type, data_vector, addtion_vector, constrain_set)
+
+            mean_val, es_val = count_mean_and_es_val(data_vector, delta_vetor)
+
+            ref_val = mean_val + REF_RATION * es_val
+
+            X_max_min = count_hiding_function_val(ref_val, data_vector, delta_vetor)
+
+            return delta_vetor, X_max_min
+
+      elif distortion_type == DISTORTION_TYPE:
+            pass
+      else:
+            print('distortion type no support, do nothing')
+            return None, None
+
+
+#数据集填入随机数据
+data_vector = []
+
+#约束集暂时按最大最小 这里按百分比的绝对值给出
+constrain_set = [-0.03, 0.03]
+
+for index in range(500):
+      data_vector.append(random.random())
+
+print('-----------------------------INPUT')
+print(data_vector)
+
+delta_vetor, Xmax = count_insert_vector(MAX_OPTIOM, DISTORTION_BOUND, data_vector, constrain_set)
+
+print('-----------------------------OUTPUT')
+print(delta_vetor)

@@ -156,10 +156,13 @@ def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarr
 
     return result_list
 
+#param3 允许误差  FLOAT，比如 0.03 表示 可以在单个值嵌入 3%以内的误差
+#param4 
+def embed_watermark_bit(bit_val:int, sub_dataset:ndarray, permit_distortion:float, constrait_set: []):
+    if int(bit_val) == 1:  #max option problem using pattern search
+        
 
-def embed_watermark_bit(bit_val:int, sub_dataset:ndarray):
-    if int(bit_val) == 1:  #max option
-        pass
+
     elif int(bit_val) == 0: #min option
         pass
     else:  #do nothing
@@ -169,6 +172,7 @@ def embed_watermark_bit(bit_val:int, sub_dataset:ndarray):
 
 
 MIN_DATASET_SIZE = 100
+PARTITION_MARK_MIN_RATE = 5  #算法种 m >> l(len of watermark)  涉及解码投票，需为奇
 #加入水印
 def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
 
@@ -178,8 +182,7 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         watermark_len = len(binarr)
         dataset_origin:ndarray = input_matrix[item]
 
-        #partition_nums = int(dataset_origin.shape[0] / MIN_DATASET_SIZE)
-        partition_nums = 100
+        partition_nums = len(binarr) * PARTITION_MARK_MIN_RATE
 
         #step1 将数据集分组
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
