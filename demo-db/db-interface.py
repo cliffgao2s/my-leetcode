@@ -138,6 +138,8 @@ def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarr
         temp_list = []
         sub_sets.append(temp_list)
 
+    print(origin_data_set.shape[0])
+
     for index in range(origin_data_set.shape[0]):
         h1 = hmac.new(str(int(origin_data_set[index][0])).encode('utf-8'), secret_key.encode('utf-8'), digestmod='MD5').hexdigest()
         h2 = hmac.new(secret_key.encode('utf-8'), h1.encode('utf-8'), digestmod='MD5').hexdigest()
@@ -155,8 +157,15 @@ def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarr
     return result_list
 
 
-def embed_watermark_bit(bit_val, sub_dataset):
-    pass
+def embed_watermark_bit(bit_val:int, sub_dataset:ndarray):
+    if int(bit_val) == 1:  #max option
+        pass
+    elif int(bit_val) == 0: #min option
+        pass
+    else:  #do nothing
+        pass
+        
+    return sub_dataset
 
 
 MIN_DATASET_SIZE = 100
@@ -176,15 +185,20 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
 
         #step2 将水印按BIT位加入,水印只支持  数字 字母 + 常用字符 !等，从ASCII 33开始，保证至少为6位
+        
         for index in range(len(sub_dataset)):
             sub_arr:ndarray = sub_dataset[index]
+            '''
             #对于超过最小值下限的数据集才嵌入水印，控制误差
             if sub_arr.shape[0] > MIN_DATASET_SIZE:
                 slot = int(index % watermark_len)
                 embed_watermark_bit(binarr[slot], sub_dataset[index])
+            '''
+        
         
         #step3 将水印数据反写回SQL文件
-        
+
+
 
 #抽取水印,返回所有可能的字母
 def waternark_extract_alg1(input_matrix : {}):
