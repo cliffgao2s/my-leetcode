@@ -156,46 +156,57 @@ MIN_OPTIOM = 2
 DISTORTION_BOUND = 1   #误差嵌入类型  1   给出上下界
 DISTORTION_TYPE = 2    #误差嵌入类型  2   给出分段的上下界
 
-REF_RATION = 0.01   #0-1   ref的计算步长
+REF_RATION = 0.01   #0-1   ref的系数
 
-#2个向量的长度一致,外部保证
-def count_mean_and_es_val(data_vector:[], addtion_vector:[]):
-      sum = 0.0
-      for index in range(len(data_vector)):
-            sum += data_vector[index] + addtion_vector[index]
-      
-      mean_val = sum / len(data_vector)
+PATTERN_SEARCH_INIT_STEP = 0.1     #步长
+PATTERN_SEARCH_SHORT_RATION = 0.5   #在单论搜索最大/最小值失败后，步长的缩短系数，此处采用减半策略  
+PATTERN_SEARCH_INIT_ADD_SPEED = 1  # >=1
+PATTERN_SEARCH_PRECISION = 0.0001  #模式搜索最小的精度，|a-b|差值小于该值认为a == b
+PATTERN_SEARCH_MAX_SEARCH_STEPS = 10000   #模式搜索最大次数
 
-      es_val = 0.0
-
-      for index in range(len(data_vector)):
-            es_val += (data_vector[index] + addtion_vector[index] - mean_val) * (data_vector[index] + addtion_vector[index] - mean_val)
-            
-      return mean_val, es_val
-
-def count_hiding_function_val(ref_val:float, data_vector:[], addtion_vector:[]):
+def count_hiding_function_val(ref_val:float, combine_vector:ndarray):
       sum = 0
 
-      for index in range(len(data_vector)):
-            if data_vector[index] + addtion_vector[index] >= ref_val:
+      for index in range(combine_vector.shape[0]):
+            if combine_vector[index] >= ref_val:
                   sum += 1 
 
-      return sum / len(data_vector)
+      return sum / combine_vector.shape[0]
 
 #模式搜索最优化
-def pattern_search_optiom_with_range(optim_type:int, data_vector:[], addtion_vector:[], constrain_set:[]):
+def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, addtion_vector:ndarray, constrain_set:[]):
 
       delta_vetor = []
 
-      mean_val, es_val = count_mean_and_es_val(data_vector, addtion_vector)
+      mean_val = np.mean(data_vector + addtion_vector)
+      es_val = np.var(data_vector + addtion_vector)
 
       ref_val = mean_val + REF_RATION * es_val
 
-      temp_tao_val = count_hiding_function_val(ref_val, data_vector, addtion_vector)
+      init_tao_val = count_hiding_function_val(ref_val, data_vector + addtion_vector)
+      
+      loop = 0
+      #初始第一轮的挪动步长,此处为比例的绝对值，还要结合每一个data_vector具体值计算
+      init_step_len = PATTERN_SEARCH_INIT_STEP * (constrain_set[1] - constrain_set[0])
+
+      not_found_val = True
+
+      #终止条件?
+      while not_found_val:
+            loop += 1
+
+            if loop > PATTERN_SEARCH_MAX_SEARCH_STEPS:
+                  break
+            
+            if optim_type == MAX_OPTIOM:   #查找全局最大值
+                  pass
+            else:   #查找全局最小值
+                  pass
+
 
       
 
-      return delta_vetor
+      return delta_vetor, temp_tao_val
 
 #方式2   给出各个数据的范围，在各自的type范围内变动
 def pattern_search_optiom_with_types():
@@ -203,20 +214,15 @@ def pattern_search_optiom_with_types():
 
 
 
-def count_insert_vector(optim_type, distortion_type, data_vector, constrain_set):
+def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray, constrain_set:[]):
       #初始化的嵌入量向量，默认为全0
       addtion_vector = []
+      #init delta vector
       for item in data_vector:
-            addtion_vector.append(0)
+                addtion_vector.append(0)
 
-      if distortion_type == DISTORTION_BOUND:
-            delta_vetor = pattern_search_optiom_with_range(optim_type, data_vector, addtion_vector, constrain_set)
-
-            mean_val, es_val = count_mean_and_es_val(data_vector, delta_vetor)
-
-            ref_val = mean_val + REF_RATION * es_val
-
-            X_max_min = count_hiding_function_val(ref_val, data_vector, delta_vetor)
+      if distortion_type == DISTORTION_BOUND:            
+            delta_vetor, X_max_min = pattern_search_optiom_with_range(optim_type, data_vector, np.asarray(addtion_vector), constrain_set)
 
             return delta_vetor, X_max_min
 
@@ -239,7 +245,7 @@ for index in range(500):
 print('-----------------------------INPUT')
 print(data_vector)
 
-delta_vetor, Xmax = count_insert_vector(MAX_OPTIOM, DISTORTION_BOUND, data_vector, constrain_set)
+delta_vetor, Xmax = count_insert_vector(MAX_OPTIOM, DISTORTION_BOUND, np.asarray(data_vector), constrain_set)
 
 print('-----------------------------OUTPUT')
 print(delta_vetor)

@@ -191,6 +191,7 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         
         for index in range(len(sub_dataset)):
             sub_arr:ndarray = sub_dataset[index]
+            
             '''
             #对于超过最小值下限的数据集才嵌入水印，控制误差
             if sub_arr.shape[0] > MIN_DATASET_SIZE:
