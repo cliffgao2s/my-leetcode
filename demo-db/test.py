@@ -151,7 +151,7 @@ print(int(h1, 16) % 100)
 #=============================================================================
 
 MAX_OPTIOM = 1  #求解全局最优的最大解
-MIN_OPTIOM = 2
+MIN_OPTIOM = 0
 
 DISTORTION_BOUND = 1   #误差嵌入类型  1   给出上下界
 DISTORTION_TYPE = 2    #误差嵌入类型  2   给出分段的上下界
@@ -173,7 +173,7 @@ def count_hiding_function_val(ref_val:float, combine_vector:ndarray):
       return sum / combine_vector.shape[0]
 
 
-def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:[], direction_type:int):
+def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:[], direction_type:int, forward_len:float):
       ref_val = np.mean(data_vector + addtion_vector) + REF_RATION * np.var(data_vector + addtion_vector)
       tao_val = count_hiding_function_val(ref_val, data_vector + addtion_vector)
 
@@ -181,9 +181,6 @@ def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:
 
       for index in range(data_vector.shape[0]):
             step_moved = False
-
-            #轴移动的步长  待商榷??? 固定值 OR 固定比例
-            forward_len = data_vector[index] / 100
 
             if addtion_vector[index] + forward_len <= data_vector[index] *  constrain_set[1]: #没有超过约束
                   origin_add = addtion_vector[index]
@@ -250,10 +247,14 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, addtio
 
       not_found_val = True
 
+      short_step_ration = 1.0
+
       #终止条件  --沿最优方向 搜索一轮后，没有更优结果，且缩小步长再次搜索后没有更优结果
       while not_found_val:
+            #每次移动步长以平均值的1/100开始
+            step_len = (np.mean(data_vector) / 10) * short_step_ration
             #进行轴搜索
-            tao_temp_val, add_fix_vetctor = search_one_round(data_vector, addtion_vector, constrain_set, optim_type)
+            tao_temp_val, add_fix_vetctor = search_one_round(data_vector, addtion_vector, constrain_set, optim_type, step_len)
             if optim_type == MAX_OPTIOM:   #查找全局最大值
                   if tao_temp_val - init_tao_val > PATTERN_SEARCH_PRECISION:
                         #进行模式搜索，沿着N维向量的当前方向进行
@@ -262,7 +263,11 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, addtio
                   else:
                         #缩短1次STEP
                         #暂时不搜索了，提高运行速度，直接退出，得到当前的最优解
-                        not_found_val = False
+                        if short_step_ration < 0.125:
+                              not_found_val = False
+                        else:
+                              #算短步长继续搜索
+                              short_step_ration = short_step_ration * PATTERN_SEARCH_SHORT_RATION
 
             else:   #查找全局最小值
                   if init_tao_val - tao_temp_val > PATTERN_SEARCH_PRECISION:
@@ -271,7 +276,11 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, addtio
                         addtion_vector = addtion_vector + PATTERN_SEARCH_INIT_ADD_SPEED * (add_fix_vetctor - addtion_vector)
                   else:
                         #缩短1次STEP
-                        not_found_val = False
+                        if short_step_ration < 0.125:
+                              not_found_val = False
+                        else:
+                              #算短步长继续搜索
+                              short_step_ration = short_step_ration * PATTERN_SEARCH_SHORT_RATION
       
 
       return addtion_vector, init_tao_val
