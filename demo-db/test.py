@@ -1,6 +1,8 @@
 import re, numpy as np, hmac, random, math, cmath
 from numpy import ndarray
 from math import pow
+from scipy.optimize import curve_fit
+#from scipy import asarray as ar,exp
 
 #=============================================================================
 '''
@@ -314,14 +316,16 @@ def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray
 
 
 #从计算出的MAX和MIN队列种计算解码阈值T*
-def count_decode_threshhold(x_max:ndarray, x_min:ndarray, mean_sqr_err_0:float, mean_sqr_err_1:float, mean_0:float, mean_1:float):
+def count_decode_thresh_hold(x_max:ndarray, x_min:ndarray, mean_sqr_err_0:float, mean_sqr_err_1:float, mean_0:float, mean_1:float):
       prob_1 = np.mean(x_max) / (np.mean(x_max) + np.mean(x_min))
       prob_0 = 1 - prob_1
 
-      a = (pow(mean_sqr_err_0, 2) - pow(mean_sqr_err_1, 2)) / (2 * (pow(mean_sqr_err_0, 2)) * pow(mean_sqr_err_1, 2))
+      a = (pow(mean_sqr_err_0, 2) - pow(mean_sqr_err_1, 2)) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       b = ((mean_0 * pow(mean_sqr_err_1, 2)) - (mean_1 * pow(mean_sqr_err_0, 2))) / (pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
-      c = math.log((prob_0 * mean_sqr_err_1 / prob_1 * mean_sqr_err_0), math.e) +  ((pow(mean_1, 2) * pow(mean_sqr_err_0, 2)) - (pow(mean_0, 2) * pow(mean_sqr_err_1, 2))) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
+      c = math.log((prob_0 * mean_sqr_err_1 / prob_1 * mean_sqr_err_0)) +  ((pow(mean_1, 2) * pow(mean_sqr_err_0, 2)) - (pow(mean_0, 2) * pow(mean_sqr_err_1, 2))) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       
+      print('--------- a [%f] b [%f] c [%f]' % (a, b, c))
+
       x1 = None
       x2 = None
       discriminant = (b**2)-(4*a*c)
@@ -339,6 +343,39 @@ def count_decode_threshhold(x_max:ndarray, x_min:ndarray, mean_sqr_err_0:float, 
       return x1, x2
 
 
+def gaussian(x,*param):
+    u = param[0]
+    sig = param[1]
+
+    return np.exp(-(x - u) ** 2 / (2 * sig ** 2))/ ((sig * math.sqrt(2 * math.pi)))
+
+#计算一组统计数据的高斯分布参数
+def count_gauss_distribute_params(x_vector:ndarray, y_vector:ndarray):
+      #正态分布的初始化的均值和方差数据
+      p0=[0, math.sqrt(0.2)] 
+
+      popt, pcov = curve_fit(gaussian, x_vector, y_vector, p0)
+
+      return popt[0], popt[1]
+
+#将1维的数据，以小数点后2位为精度，分散到0-1为界的X-Y坐标系内，方便后续 正态分布的拟合计算
+def convert_data_into_xy(data_vector:ndarray):
+      x_list = []
+      y_list = []
+
+      for index in range(1, 101):
+            x_list.append(round(0.01 * index, 2))
+            y_list.append(0)
+
+      for item in data_vector:
+            slot = int(round(item, 2) * 100 % 100 )
+            y_list[slot] = y_list[slot] + 1  
+
+      print(x_list)
+      print(y_list)
+      return np.asarray(x_list), np.asarray(y_list)
+
+
 #解码，从给定的分组种获取水印的BIT位信息
 def decode_bit_from_partition(thresh_hold:float, data_vector:ndarray):
       pass
@@ -351,38 +388,37 @@ constrain_set = [-0.025, 0.025]
 max_list = []
 min_list = []
 
-max_mean_list = []
-min_mean_list = []
 
-max_mean_sqr_err_list = []
-min_mean_sqr_err_list = []
-
-
-
-for index_1 in range(10):
+for index_1 in range(50):
       data_vector_max = []
       for index in range(MIN_DATA_SET_PARTITION):
-            data_vector_max.append(random.uniform(0,20))
+            data_vector_max.append(random.uniform(0,50))
 
       data_vector_min = []
       for index in range(MIN_DATA_SET_PARTITION):
-            data_vector_min.append(random.uniform(0,20))
+            data_vector_min.append(random.uniform(0,50))
 
       delta_vetor_min, Xmin = count_insert_vector(MIN_OPTIOM, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
-      min_mean_list.append(np.mean(np.asarray(data_vector_min) + delta_vetor_min))
-      min_mean_sqr_err_list.append(math.sqrt(np.var(np.asarray(data_vector_min) + delta_vetor_min)))
       min_list.append(Xmin)
 
       delta_vetor_max, Xmax = count_insert_vector(MAX_OPTIOM, DISTORTION_BOUND, np.asarray(data_vector_max) , constrain_set)
-      max_mean_list.append(np.mean(delta_vetor_max + np.asarray(data_vector_max)))
-      max_mean_sqr_err_list.append(math.sqrt(np.var(delta_vetor_max + np.asarray(data_vector_max))))
       max_list.append(Xmax)
 
       print('--------------- sample [%d] min = [%f] max = [%f] ' % (index_1, Xmin, Xmax))
       
 
-t1, t2 = count_decode_threshhold(max_list, min_list, np.mean(min_mean_sqr_err_list), np.mean(max_mean_sqr_err_list), np.mean(min_mean_list), np.mean(max_mean_list))
+min_x, min_y = convert_data_into_xy(np.asarray(min_list))
+gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y)
 
-print('------------- T* = [%f] [%f]' % (t1, t2))
+max_x, max_y = convert_data_into_xy(np.asarray(max_list))
+gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y)
 
+t1, t2 = count_decode_thresh_hold(max_list, min_list, gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
+
+if t1 > 0.0 and t1 < 1.0:
+      result = t1
+else:
+      result = t2
+
+print('-------------threash hold result [%f] ' % (result))
 
