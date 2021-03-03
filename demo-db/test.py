@@ -2,6 +2,7 @@ import re, numpy as np, hmac, random, math, cmath
 from numpy import ndarray
 from math import pow
 from scipy.optimize import curve_fit
+import pylab as plt
 
 #=============================================================================
 '''
@@ -158,7 +159,7 @@ MIN_OPTIOM = 0
 DISTORTION_BOUND = 1   #误差嵌入类型  1   给出上下界
 DISTORTION_TYPE = 2    #误差嵌入类型  2   给出分段的上下界
 
-REF_RATION = 0.2   #0-1   ref的系数,经过实践，RATION越小，MAX和MIN间的差距越大
+REF_RATION = 0.5   #0-1   ref的系数,经过实践，RATION越小，MAX和MIN间的差距越大
 
 PATTERN_SEARCH_SHORT_RATION = 0.75   #在单论搜索最大/最小值失败后，步长的缩短系数，此处采用减半策略  
 PATTERN_SEARCH_INIT_ADD_SPEED = 3  # >=1
@@ -169,6 +170,7 @@ MIN_DATA_SET_PARTITION = 200
 
 
 def count_hiding_function_val(combine_vector:ndarray):
+      '''
       ref_val = np.mean(combine_vector) + REF_RATION * math.sqrt(np.var(combine_vector))
 
       sum = 0
@@ -178,6 +180,20 @@ def count_hiding_function_val(combine_vector:ndarray):
                   sum += 1 
 
       return sum / combine_vector.shape[0]
+      '''
+
+      #以下为sigmoid光滑的实现，为了增强模式搜索的实现
+      ref_val = np.mean(combine_vector) + REF_RATION * math.sqrt(np.var(combine_vector))
+
+      sum = 0.0
+
+      param_alpha = 1.0
+
+      for index in range(combine_vector.shape[0]):
+            sum += 1 - 1 / (1 + pow(math.e, param_alpha * (combine_vector[index] - ref_val)))
+
+      return sum / combine_vector.shape[0]
+
 
 
 def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:[], direction_type:int, forward_len:float):
@@ -241,11 +257,14 @@ def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:
 #模式搜索最优化
 def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constrain_set:[]):
 
-      #初始化的嵌入量向量，默认为全0
       addtion_vector_1 = []
-      #init delta vector
+      #给定随机初始值
       for index in range(data_vector.shape[0]):
-            addtion_vector_1.append(0.0)
+            if index % 2 == 0:
+                  addtion_vector_1.append(data_vector[index] * random.uniform(0.3, 1) * constrain_set[1])
+            else:
+                  addtion_vector_1.append(data_vector[index] * random.uniform(0.3, 1) * constrain_set[0])
+
       addtion_vector = np.asarray(addtion_vector_1)
       
       init_tao_val = count_hiding_function_val(data_vector + addtion_vector)
@@ -265,7 +284,7 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constr
                   break
 
             #change
-            step_len = (constrain_set[1] - constrain_set[0]) * 0.49 * short_step_ration
+            step_len = (constrain_set[1] - constrain_set[0]) * 0.1 * short_step_ration
             #进行轴搜索
             tao_temp_val, add_fix_vetctor = search_one_round(data_vector, addtion_vector, constrain_set, optim_type, step_len)
 
@@ -297,7 +316,6 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constr
                         #算短步长继续搜索
                         short_step_ration = short_step_ration * PATTERN_SEARCH_SHORT_RATION
       
-
       return best_addtion_vector, init_tao_val
 
 #方式2   给出各个数据的范围，在各自的type范围内变动
@@ -321,15 +339,16 @@ def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray
 
 
 #从计算出的MAX和MIN队列种计算解码阈值T*
-def count_decode_thresh_hold(x_max:ndarray, x_min:ndarray, mean_sqr_err_0:float, mean_sqr_err_1:float, mean_0:float, mean_1:float):
-      prob_1 = np.mean(x_max) / (np.mean(x_max) + np.mean(x_min))
+def count_decode_thresh_hold(x_min:ndarray, x_max:ndarray, mean_sqr_err_0:float, mean_sqr_err_1:float, mean_0:float, mean_1:float):
+      
+      prob_1 = x_max.shape[0] / (x_max.shape[0] + x_min.shape[0])
       prob_0 = 1 - prob_1
 
       a = (pow(mean_sqr_err_0, 2) - pow(mean_sqr_err_1, 2)) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       b = ((mean_0 * pow(mean_sqr_err_1, 2)) - (mean_1 * pow(mean_sqr_err_0, 2))) / (pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       c = math.log((prob_0 * mean_sqr_err_1 / prob_1 * mean_sqr_err_0)) +  ((pow(mean_1, 2) * pow(mean_sqr_err_0, 2)) - (pow(mean_0, 2) * pow(mean_sqr_err_1, 2))) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       
-      print('--------- a [%f] b [%f] c [%f]' % (a, b, c))
+      print('---------prob0 [%f] prob1 [%f] a [%f] b [%f] c [%f]' % (prob_0, prob_1, a, b, c))
 
       x1 = None
       x2 = None
@@ -344,8 +363,11 @@ def count_decode_thresh_hold(x_max:ndarray, x_min:ndarray, mean_sqr_err_0:float,
                   root = cmath.sqrt(discriminant)
             x1 = (-b+root)/(2*a)
             x2 = (-b-root)/(2*a)
-
-      return x1, x2
+      
+      if x1 > 0.0 and x1 < 1.0:
+            return x1
+      else:
+            return x2
 
 
 def gaussian(x,*param):
@@ -383,16 +405,19 @@ def convert_data_into_xy(data_vector:ndarray):
 #解码，从给定的分组种获取水印的BIT位信息
 def decode_bit_from_partition(thresh_hold:float, data_vector:ndarray):
       tao_val = count_hiding_function_val(data_vector)
-      
-      print('+++++++ thresh [%f] tao [%f] input-mean [%f]' % (thresh_hold, tao_val, np.mean(data_vector)))
+
+      result = 0
 
       if tao_val >= thresh_hold:
-            return 1
-      else:
-            return 0
+            result = 1
+
+      print('+++++++ thresh [%f] tao [%f] result [%d]' % (thresh_hold, tao_val, result))
+
+      return result
+
 
 #约束集暂时按最大最小 这里按百分比的绝对值给出
-constrain_set = [-0.025, 0.025]
+constrain_set = [-0.05, 0.05]
 
 max_list = []
 min_list = []
@@ -430,19 +455,28 @@ gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y
 max_x, max_y = convert_data_into_xy(np.asarray(max_list))
 gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y)
 
-t1, t2 = count_decode_thresh_hold(max_list, min_list, gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
+#绘制图像
+plt.plot(min_x,min_y,'b+:',label='bit_0')
+plt.plot(min_x,max_y,'c+:',label='bit_1')
+p_min = [gauss_min_mean, gauss_min_mean_sqrt]
+p_max = [gauss_max_mean, gauss_max_mean_sqrt]
+plt.plot(min_x,gaussian(min_x,*p_min),'ro:',label='fit_bit_0')
+plt.plot(min_x,gaussian(min_x,*p_max),'o:',label='fit_bit_1')
+plt.legend()
+plt.show()
+#绘制结束
 
-if t1 > 0.0 and t1 < 1.0:
-      result = t1
-else:
-      result = t2
+result = count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
+
+
+print('------------ thresh = [%f] min mean = [%f]  max mean = [%f]' % (result, np.mean(min_list), np.mean(max_list)))
 
 
 print('---------------------------- bit 0 results')
-
 for index in range(len(min_result_list)):
       bit_con = decode_bit_from_partition(result, min_result_list[index])
 
 print('---------------------------- bit 1 results')
 for index in range(len(max_result_list)):
       bit_con = decode_bit_from_partition(result, max_result_list[index])
+
