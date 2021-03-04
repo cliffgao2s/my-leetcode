@@ -199,7 +199,6 @@ def count_hiding_function_val(combine_vector:ndarray):
 def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:ndarray, direction_type:int, forward_len:float):
       #此处用的应该是sqrt均方差，而不是var方差
       tao_val = count_hiding_function_val(data_vector + addtion_vector)
-
       for index in range(data_vector.shape[0]):
             step_moved = False
 
@@ -350,7 +349,6 @@ def pattern_search_optiom(optim_type:int, data_vector:ndarray, constrain_set:nda
 
 
 def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray, constrain_set:[]):
-      
       if distortion_type == DISTORTION_BOUND:
             constrain_set_new = []
 
@@ -375,6 +373,10 @@ def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray
                               temp.append(item[0])
                               temp.append(item[1])
                               break
+                  #如果都没有 说明到达了上界限，因为这里是包左不包右
+                  if len(temp) <= 0:
+                        temp.append(constrain_set[-1][0])
+                        temp.append(constrain_set[-1][1])
                   constrain_set_new.append(temp)
             
             delta_vetor, X_max_min = pattern_search_optiom(optim_type, data_vector, np.asarray(constrain_set_new))

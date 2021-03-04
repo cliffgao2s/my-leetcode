@@ -235,7 +235,7 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
 
         print('------------- threash = [%f]' % (threash_hold))
         #step3 将水印数据反写回SQL文件
-        
+
 
 
 
