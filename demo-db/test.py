@@ -348,11 +348,6 @@ def pattern_search_optiom(optim_type:int, data_vector:ndarray, constrain_set:nda
       
       return best_addtion_vector, init_tao_val
 
-#方式2   给出各个数据的范围，在各自的type范围内变动
-def pattern_search_optiom_with_types():
-      pass
-
-
 
 def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray, constrain_set:[]):
       
@@ -376,7 +371,7 @@ def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray
                   temp = []
                   
                   for item in constrain_set:
-                        if data_vector[index] <= item[1] and data_vector[index] >= item[0]:
+                        if data_vector[index] < item[1] and data_vector[index] >= item[0]:
                               temp.append(item[0])
                               temp.append(item[1])
                               break
@@ -476,6 +471,9 @@ def decode_bit_from_partition(thresh_hold:float, data_vector:ndarray):
 
 #约束集暂时按最大最小 这里按百分比的绝对值给出
 constrain_set = [-0.05, 0.05]
+
+#constrain_set = [[0, 5], [5, 11], [11, 20]]
+
 
 max_list = []
 min_list = []
