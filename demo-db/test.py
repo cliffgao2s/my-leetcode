@@ -196,20 +196,20 @@ def count_hiding_function_val(combine_vector:ndarray):
 
       return sum / combine_vector.shape[0]
 
-def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:[], direction_type:int, forward_len:float):
+def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:ndarray, direction_type:int, forward_len:float):
       #此处用的应该是sqrt均方差，而不是var方差
       tao_val = count_hiding_function_val(data_vector + addtion_vector)
-
-      #print('--------------tao [%f] add mean [%f]' % (tao_val, np.mean(addtion_vector)))
 
       for index in range(data_vector.shape[0]):
             step_moved = False
 
-            if addtion_vector[index] + forward_len * data_vector[index] <= data_vector[index] *  constrain_set[1] and \
-                  addtion_vector[index] + forward_len * data_vector[index] >= data_vector[index] *  constrain_set[0]: #没有超过约束
+            step_temp = (constrain_set[index][1] - constrain_set[index][0]) * forward_len
+
+            if data_vector[index] + addtion_vector[index] + step_temp <= constrain_set[index][1] and \
+                  data_vector[index] + addtion_vector[index] + step_temp >= constrain_set[index][0]: #没有超过约束
 
                   origin_add = addtion_vector[index]
-                  addtion_vector[index] = addtion_vector[index] + forward_len * data_vector[index]
+                  addtion_vector[index] = addtion_vector[index] + step_temp
 
                   tao_temp_val = count_hiding_function_val(data_vector + addtion_vector)
 
@@ -229,11 +229,11 @@ def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:
                               addtion_vector[index] = origin_add
 
             #如果正向移动没有得到效果，则尝试反向移动一次
-            if  step_moved == False and addtion_vector[index] - forward_len * data_vector[index] >= data_vector[index]  * constrain_set[0] and \
-                  addtion_vector[index] - forward_len * data_vector[index] <= data_vector[index]  * constrain_set[1]: #没有超过约束
+            if  step_moved == False and data_vector[index] + addtion_vector[index] - step_temp >= constrain_set[index][0] and \
+                  data_vector[index] + addtion_vector[index] - step_temp <= constrain_set[index][1]: #没有超过约束
 
                   origin_add = addtion_vector[index]
-                  addtion_vector[index] = addtion_vector[index] - forward_len * data_vector[index]
+                  addtion_vector[index] = addtion_vector[index] - step_temp
 
                   tao_temp_val = count_hiding_function_val(data_vector + addtion_vector)
 
@@ -255,16 +255,13 @@ def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:
 
 
 #模式搜索最优化
-def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constrain_set:[]):
+def pattern_search_optiom(optim_type:int, data_vector:ndarray, constrain_set:ndarray):
 
       addtion_vector_1 = []
       #给定随机初始值
       for index in range(data_vector.shape[0]):
-            if index % 2 == 0:
-                  addtion_vector_1.append(data_vector[index] * random.uniform(0.0, 0.5) * constrain_set[1])
-            else:
-                  addtion_vector_1.append(data_vector[index] * random.uniform(0.0, 0.5) * constrain_set[0])
-            
+            addtion_vector_1.append(0.0)
+
       addtion_vector = np.asarray(addtion_vector_1)
       
       init_tao_val = count_hiding_function_val(data_vector + addtion_vector)
@@ -287,7 +284,7 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constr
                   break
             
             #change
-            step_len = (constrain_set[1] - constrain_set[0]) * 0.025 * step_ration
+            step_len = 0.025 * step_ration
             #进行轴搜索
             tao_temp_val, add_fix_vetctor = search_one_round(data_vector, addtion_vector, constrain_set, optim_type, step_len)
 
@@ -359,8 +356,16 @@ def pattern_search_optiom_with_types():
 
 def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray, constrain_set:[]):
       
-      if distortion_type == DISTORTION_BOUND:            
-            delta_vetor, X_max_min = pattern_search_optiom_with_range(optim_type, data_vector, constrain_set)
+      if distortion_type == DISTORTION_BOUND:
+            constrain_set_new = []
+
+            for index in range(data_vector.shape[0]):
+                  temp = []
+                  temp.append(data_vector[index] + data_vector[index] * constrain_set[0])
+                  temp.append(data_vector[index] + data_vector[index] * constrain_set[1])
+                  constrain_set_new.append(temp)
+
+            delta_vetor, X_max_min = pattern_search_optiom(optim_type, data_vector, np.asarray(constrain_set_new))
 
             return delta_vetor, X_max_min
 
@@ -469,22 +474,22 @@ for index_1 in range(50):
       data_vector_min = []
       for index in range(MIN_DATA_SET_PARTITION):
             data_vector_min.append(random.uniform(1, 20))
-      '''
+      
       data_vector_max = []
       for index in range(MIN_DATA_SET_PARTITION):
             data_vector_max.append(random.uniform(1, 20))
-      '''
+      
 
       delta_vetor_min, Xmin = count_insert_vector(0, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
       min_list.append(Xmin)
       #保存计算后的数据，用于验证
       min_result_list.append(np.asarray(data_vector_min) + delta_vetor_min)
 
-      delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
+      delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_max) , constrain_set)
       max_list.append(Xmax)
 
       #保存计算后的数据，用于验证
-      max_result_list.append(np.asarray(data_vector_min) + delta_vetor_max)
+      max_result_list.append(np.asarray(data_vector_max) + delta_vetor_max)
 
       print('--------------- sample [%d] min = [%f] max = [%f] ' % (index_1, Xmin, Xmax))
       
