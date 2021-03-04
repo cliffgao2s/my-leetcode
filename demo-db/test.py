@@ -161,12 +161,13 @@ DISTORTION_TYPE = 2    #误差嵌入类型  2   给出分段的上下界
 
 REF_RATION = 0.5   #0-1   ref的系数  tail系数  REF越大  HIDING-FUNCTION的值越小，成反比
 
-PATTERN_SEARCH_SHORT_RATION = 0.75   #在单论搜索最大/最小值失败后，步长的缩短系数，此处采用减半策略  
-PATTERN_SEARCH_INIT_ADD_SPEED = 2  # >= 1
+PATTERN_SEARCH_SHORT_RATION = 0.5   #在单论搜索最大/最小值失败后，步长的缩短系数
+PATTERN_SEARCH_LARGE_RATION = 2   #在单次的轴搜索成功后，除了扩大模式范围，同时也增加搜索步长倍数
+PATTERN_SEARCH_INIT_ADD_SPEED = 3  # >= 1
 PATTERN_SEARCH_PRECISION = 0.000001  #模式搜索最小的精度，|a-b|差值小于该值认为a == b
 
 #兼顾效率和区分度，最佳的数据子集大小为200
-MIN_DATA_SET_PARTITION = 200
+MIN_DATA_SET_PARTITION = 150
 
 
 def count_hiding_function_val(combine_vector:ndarray):
@@ -188,18 +189,18 @@ def count_hiding_function_val(combine_vector:ndarray):
 
       sum = 0.0
 
-      param_alpha = 1.0
+      param_alpha = 8.0
 
       for index in range(combine_vector.shape[0]):
             sum += 1 - 1 / (1 + pow(math.e, param_alpha * (combine_vector[index] - ref_val)))
 
       return sum / combine_vector.shape[0]
 
-
-
 def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:[], direction_type:int, forward_len:float):
       #此处用的应该是sqrt均方差，而不是var方差
       tao_val = count_hiding_function_val(data_vector + addtion_vector)
+
+      #print('--------------tao [%f] add mean [%f]' % (tao_val, np.mean(addtion_vector)))
 
       for index in range(data_vector.shape[0]):
             step_moved = False
@@ -213,14 +214,14 @@ def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:
                   tao_temp_val = count_hiding_function_val(data_vector + addtion_vector)
 
                   if direction_type == MAX_OPTIOM:
-                        if tao_temp_val > tao_val:
+                        if tao_temp_val - tao_val > PATTERN_SEARCH_PRECISION:
                               tao_val = tao_temp_val
                               step_moved = True
                         else:
                               #恢复数据
                               addtion_vector[index] = origin_add
                   else:
-                        if tao_temp_val < tao_val:
+                        if  tao_val - tao_temp_val > PATTERN_SEARCH_PRECISION:
                               tao_val = tao_temp_val
                               step_moved = True
                         else:
@@ -237,13 +238,13 @@ def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:
                   tao_temp_val = count_hiding_function_val(data_vector + addtion_vector)
 
                   if direction_type == MAX_OPTIOM:
-                        if tao_temp_val > tao_val:
+                        if tao_temp_val - tao_val > PATTERN_SEARCH_PRECISION:
                               tao_val = tao_temp_val
                               step_moved = True
                         else:
                               addtion_vector[index] = origin_add
                   else:
-                        if tao_temp_val < tao_val:
+                        if tao_val - tao_temp_val > PATTERN_SEARCH_PRECISION:
                               tao_val = tao_temp_val
                               step_moved = True
                         else:
@@ -260,34 +261,33 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constr
       #给定随机初始值
       for index in range(data_vector.shape[0]):
             if index % 2 == 0:
-                  addtion_vector_1.append(data_vector[index] * random.uniform(0.3, 0.7) * constrain_set[1])
+                  addtion_vector_1.append(data_vector[index] * random.uniform(0.0, 0.5) * constrain_set[1])
             else:
-                  addtion_vector_1.append(data_vector[index] * random.uniform(0.3, 0.7) * constrain_set[0])
-
+                  addtion_vector_1.append(data_vector[index] * random.uniform(0.0, 0.5) * constrain_set[0])
+            
       addtion_vector = np.asarray(addtion_vector_1)
       
       init_tao_val = count_hiding_function_val(data_vector + addtion_vector)
 
       not_found_val = True
 
-      short_step_ration = 1.0
+      step_ration = 1.0
 
       best_addtion_vector = addtion_vector
 
-      back_to_init = False
+      back_to_init = True
 
       #终止条件  --沿最优方向 搜索一轮后，没有更优结果，且缩小步长再次搜索后没有更优结果
       while not_found_val:
             #缩短1次STEP
             #暂时不搜索了，提高运行速度，直接退出，得到当前的最优解
-            '''
-            if short_step_ration < 0.125:
+            
+            if step_ration < 0.25:
                   not_found_val = False
                   break
-            '''
-
+            
             #change
-            step_len = (constrain_set[1] - constrain_set[0]) * 0.05 * short_step_ration
+            step_len = (constrain_set[1] - constrain_set[0]) * 0.025 * step_ration
             #进行轴搜索
             tao_temp_val, add_fix_vetctor = search_one_round(data_vector, addtion_vector, constrain_set, optim_type, step_len)
 
@@ -297,21 +297,28 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constr
                         init_tao_val = tao_temp_val
                         best_addtion_vector = add_fix_vetctor
 
-                        back_to_init = False
-
-                        addtion_vector = add_fix_vetctor + PATTERN_SEARCH_INIT_ADD_SPEED * (add_fix_vetctor - addtion_vector)
-                  else:
-                        if back_to_init:
-                              not_found_val = False
-                              break
-
-                        #退回出发点
-                        addtion_vector = best_addtion_vector
-
                         back_to_init = True
 
-                        #算短步长继续搜索
-                        #short_step_ration = short_step_ration * PATTERN_SEARCH_SHORT_RATION
+                        addtion_vector = add_fix_vetctor + PATTERN_SEARCH_INIT_ADD_SPEED * (add_fix_vetctor - addtion_vector)
+
+                        #扩大步长范围
+                        step_ration = step_ration * PATTERN_SEARCH_LARGE_RATION
+                  else:
+                        '''
+                        if back_to_init == False:
+                              not_found_val = False
+                              break
+                        
+                        back_to_init = True
+                        '''
+
+                        #退回出发点
+                        if back_to_init:
+                              addtion_vector = best_addtion_vector
+                              back_to_init = False
+                        else:
+                              #缩短步长继续搜索
+                              step_ration = step_ration * PATTERN_SEARCH_SHORT_RATION
 
             else:   #查找全局最小值
                   if init_tao_val - tao_temp_val > PATTERN_SEARCH_PRECISION:
@@ -319,21 +326,28 @@ def pattern_search_optiom_with_range(optim_type:int, data_vector:ndarray, constr
                         init_tao_val = tao_temp_val
                         best_addtion_vector = add_fix_vetctor
 
-                        back_to_init = False
-
-                        addtion_vector = add_fix_vetctor + PATTERN_SEARCH_INIT_ADD_SPEED * (add_fix_vetctor - addtion_vector)
-                  else:
-                        if back_to_init:
-                              not_found_val = False
-                              break
-
-                        #退回出发点
-                        addtion_vector = best_addtion_vector
-
                         back_to_init = True
 
-                        #算短步长继续搜索
-                        #short_step_ration = short_step_ration * PATTERN_SEARCH_SHORT_RATION
+                        addtion_vector = add_fix_vetctor + PATTERN_SEARCH_INIT_ADD_SPEED * (add_fix_vetctor - addtion_vector)
+
+                        #扩大步长范围
+                        step_ration = step_ration * PATTERN_SEARCH_LARGE_RATION
+                  else:
+                        '''
+                        if back_to_init == False:
+                              not_found_val = False
+                              break
+                              
+                        back_to_init = True
+                        '''
+
+                        #退回出发点
+                        if back_to_init:
+                              addtion_vector = best_addtion_vector
+                              back_to_init = False
+                        else:
+                              #SHORT步长继续搜索
+                              step_ration = step_ration * PATTERN_SEARCH_SHORT_RATION
       
       return best_addtion_vector, init_tao_val
 
@@ -359,16 +373,15 @@ def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray
 
 #从计算出的MAX和MIN队列种计算解码阈值T*
 def count_decode_thresh_hold(x_min:ndarray, x_max:ndarray, mean_sqr_err_0:float, mean_sqr_err_1:float, mean_0:float, mean_1:float):
-      
       prob_1 = x_max.shape[0] / (x_max.shape[0] + x_min.shape[0])
       prob_0 = 1 - prob_1
+
+      result = 0.0
 
       a = (pow(mean_sqr_err_0, 2) - pow(mean_sqr_err_1, 2)) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       b = ((mean_0 * pow(mean_sqr_err_1, 2)) - (mean_1 * pow(mean_sqr_err_0, 2))) / (pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       c = math.log((prob_0 * mean_sqr_err_1 / prob_1 * mean_sqr_err_0)) +  ((pow(mean_1, 2) * pow(mean_sqr_err_0, 2)) - (pow(mean_0, 2) * pow(mean_sqr_err_1, 2))) / (2 * pow(mean_sqr_err_0, 2) * pow(mean_sqr_err_1, 2))
       
-      print('---------prob0 [%f] prob1 [%f] a [%f] b [%f] c [%f]' % (prob_0, prob_1, a, b, c))
-
       x1 = None
       x2 = None
       discriminant = (b**2)-(4*a*c)
@@ -384,10 +397,17 @@ def count_decode_thresh_hold(x_min:ndarray, x_max:ndarray, mean_sqr_err_0:float,
             x2 = (-b-root)/(2*a)
       
       if x1 > 0.0 and x1 < 1.0:
-            return x1
+            result = x1
       else:
-            return x2
+            result = x2
 
+      #优化过程，暂时先增加处理，如果result因精度原因没有落在MIN MAX之间，则简单计算
+      if result <= np.mean(x_min) or result >= np.mean(x_max):
+            print('!!!!!!!! T* not corect [%f]!!!!!' % (result))
+            result = np.mean(x_min) + (np.mean(x_max) - np.mean(x_min)) * (prob_0 / (prob_0 + prob_1))
+            print('!!!!!!!! T* fix value  [%f]!!!!!' % (result))
+
+      return result
 
 def gaussian(x,*param):
     u = param[0]
@@ -409,15 +429,17 @@ def convert_data_into_xy(data_vector:ndarray):
       x_list = []
       y_list = []
 
-      for index in range(1, 101):
-            x_list.append(round(0.01 * index, 2))
+      fit_precision = 0.01
+      fit_bits= 2 #位数
+
+      for index in range((int)(1/fit_precision)):
+            x_list.append(round(fit_precision * index, fit_bits))
             y_list.append(0)
 
       for item in data_vector:
-            slot = int(round(item, 2) * 100 % 100 )
+            slot = int(round(item, fit_bits) * (int)(1/fit_precision) % (int)(1/fit_precision) )
             y_list[slot] = y_list[slot] + 1
 
-      print(y_list)
       return np.asarray(x_list), np.asarray(y_list)
 
 
@@ -429,8 +451,6 @@ def decode_bit_from_partition(thresh_hold:float, data_vector:ndarray):
 
       if tao_val >= thresh_hold:
             result = 1
-
-      print('+++++++ thresh [%f] tao [%f] result [%d]' % (thresh_hold, tao_val, result))
 
       return result
 
@@ -445,25 +465,26 @@ max_result_list = []
 min_result_list = []
 
 for index_1 in range(50):
-
+      #暂时使用同源数据
       data_vector_min = []
       for index in range(MIN_DATA_SET_PARTITION):
-            data_vector_min.append(random.uniform(1, 50))
-
+            data_vector_min.append(random.uniform(1, 20))
+      '''
       data_vector_max = []
       for index in range(MIN_DATA_SET_PARTITION):
-            data_vector_max.append(random.uniform(1, 50))
+            data_vector_max.append(random.uniform(1, 20))
+      '''
 
       delta_vetor_min, Xmin = count_insert_vector(0, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
       min_list.append(Xmin)
       #保存计算后的数据，用于验证
       min_result_list.append(np.asarray(data_vector_min) + delta_vetor_min)
 
-      delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_max) , constrain_set)
+      delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
       max_list.append(Xmax)
 
       #保存计算后的数据，用于验证
-      max_result_list.append(np.asarray(data_vector_max) + delta_vetor_max)
+      max_result_list.append(np.asarray(data_vector_min) + delta_vetor_max)
 
       print('--------------- sample [%d] min = [%f] max = [%f] ' % (index_1, Xmin, Xmax))
       
@@ -474,8 +495,10 @@ gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y
 max_x, max_y = convert_data_into_xy(np.asarray(max_list))
 gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y)
 
-#绘制图像
+print('---------- gaussian min  mean[%f] var[%f]  || max mean[%f] var[%f] ' % (gauss_min_mean, gauss_min_mean_sqrt, gauss_max_mean, gauss_max_mean_sqrt))
 
+#绘制图像
+'''
 plt.plot(min_x,min_y,'b+:',label='bit_0')
 plt.plot(min_x,max_y,'c+:',label='bit_1')
 p_min = [gauss_min_mean, gauss_min_mean_sqrt]
@@ -484,7 +507,7 @@ plt.plot(min_x,gaussian(min_x,*p_min),'ro:',label='fit_bit_0')
 plt.plot(min_x,gaussian(min_x,*p_max),'o:',label='fit_bit_1')
 plt.legend()
 plt.show()
-
+'''
 #绘制结束
 
 result = count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
@@ -492,12 +515,17 @@ result = count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), ga
 
 print('------------ thresh = [%f] min mean = [%f]  max mean = [%f]' % (result, np.mean(min_list), np.mean(max_list)))
 
-
-print('---------------------------- bit 0 results')
+num0 = 0
 for index in range(len(min_result_list)):
       bit_con = decode_bit_from_partition(result, min_result_list[index])
+      if bit_con == 0:
+            num0 += 1
 
-print('---------------------------- bit 1 results')
+print('---------------------------- bit 0 results [%d] in [%d]' % (num0, len(min_result_list)))
+
+num1 = 0
 for index in range(len(max_result_list)):
       bit_con = decode_bit_from_partition(result, max_result_list[index])
-
+      if bit_con == 1:
+            num1 += 1
+print('---------------------------- bit 1 results [%d] in [%d]' % (num1, len(max_result_list)))

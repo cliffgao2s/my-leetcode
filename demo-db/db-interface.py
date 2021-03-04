@@ -15,7 +15,6 @@ def bin_2_str(bin_in):
       if len(bin_in) < 6:
             return result_list
 
-
       if len(bin_in) == 6:
             return chr(int(bin_in, 2))
 
@@ -160,9 +159,7 @@ def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarr
 #param4 
 def embed_watermark_bit(bit_val:int, sub_dataset:ndarray, permit_distortion:float, constrait_set: []):
     if int(bit_val) == 1:  #max option problem using pattern search
-        
-
-
+        pass
     elif int(bit_val) == 0: #min option
         pass
     else:  #do nothing
