@@ -181,6 +181,8 @@ def check_data_min_size(watermark:str, dataset_size:int):
 
 #加入水印
 def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
+    output_matrix = {}
+
     #实际上只目前只会执行一次FOR循环
     for item in input_matrix:
         #step0 计算data set分段数量
@@ -198,7 +200,9 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
 
         #误差范围
-        constrain_set = [[0, 0.3], [0.3, 0.7], [0.7, 1]]
+        #constrain_set = [[0, 0.3], [0.3, 0.7], [0.7, 1]]
+
+        constrain_set = [-0.1, 0.1]
         #记录最小和最大的值，用于计算T*阈值
         min_list = []
         max_list = []
@@ -213,7 +217,7 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
             if sub_arr.shape[0] > MIN_DATASET_SIZE:
                 slot = int(index % watermark_len)
                 #输入第二列数据
-                addtion_vector, x_min_max = alg.count_insert_vector(binarr[slot], alg.DISTORTION_TYPE, sub_arr[:,1], constrain_set)
+                addtion_vector, x_min_max = alg.count_insert_vector(binarr[slot], alg.DISTORTION_BOUND, sub_arr[:,1], constrain_set)
                 #最终的回写数据
                 sub_arr[:,1] = sub_arr[:,1] + addtion_vector
 
@@ -234,7 +238,14 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         threash_hold = alg.count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
 
         print('------------- threash = [%f]' % (threash_hold))
-        #step3 将水印数据反写回SQL文件
+        outlist = []
+        outlist.append(result_vals)
+        outlist.append(threash_hold)
+
+        output_matrix[item] = outlist
+        
+
+    return output_matrix
 
 
 
@@ -256,6 +267,11 @@ if __name__ == "__main__":
 
     result_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
-    waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
+    #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
+    output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
+
+    print(output_matrix['monitor_data_history'][0])
+
+
 
 
