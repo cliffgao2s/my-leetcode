@@ -48,7 +48,7 @@ print(t1)
 '''
 
 #===================================================================
-
+'''
 t1 = np.array([1,2,3,4,5])
 
 def test_input(t1):
@@ -59,11 +59,39 @@ def test_input(t1):
 t3 = test_input(t1)
 print(t1)
 print(t3)
-
+'''
 #===================================================================
+'''
+import random
 
+data_vector_min = []
+for index in range(100):
+    data_vector_min.append(random.uniform(1, 100))
 
+print(data_vector_min)
+'''
+#===================================================================
+'''
+val = [[1, 0.9], [2, 0.33], [3, 0.41] , [4, 0.19]]
 
+val1 = np.asarray(val)
 
+print(val1[:,1])
 
+add = [1,2,3,4]
 
+val1[:,1] = val1[:,1] + np.asarray(add)
+
+print(val1)
+'''
+#===================================================================  验证NUMPY数组的初始化和合并
+val = np.empty((0,3))
+print(val)
+
+v1 = np.array([1,2,3])
+v2 = np.array([4,5,6])
+
+val = np.append(val, v1)
+val = np.append(val, v2)
+
+print(val)

@@ -1,5 +1,6 @@
 import sys, os, numpy as np, re, hmac
 from numpy import ndarray
+import db_watermark_alg as alg
 
 #将STR转换为二进制
 def str_2_bin(str_in):
@@ -63,11 +64,10 @@ def get_sub_attrs(str1):
 def read_sqlfile_to_list(sqlfile, table_names : {}):
     with open(sqlfile, encoding='utf-8', mode='r') as f:
         # 读取整个sql文件，以分号切割。[:-1]删除最后一个元素，也就是空字符串
-        sql_list = f.read().split(';')[:-1]
-
+        sql_list = f.read().split(';\n')[:-1]     #以 ; + 换行符 作为切割依据
         result_matrix = {}
-
         index = 0
+
         while index < len(sql_list):
             line = sql_list[index].replace('\n', '')
             if 'CREATE TABLE' in line:
@@ -77,7 +77,7 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                     table_name = attr_list[0]
                     attr_list.pop(0)
                     #获取要处理的表项colunm名称
-                    attr_name_list : [] = table_names[table_name]
+                    attr_name_list = table_names[table_name]
                     #预读取的数据LIST
                     data_list = []
                     col_list = []
@@ -90,7 +90,7 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                     primary_key_index = 0
                     
                     #从文件中将对应col数据读取入MATRIX
-                    #2种SQL导出文件，有可能 insert into 是分行，有可能都在1行
+                    #2种SQL导出文件，有可能 insert into 是分行，有可能都在1行, 通过RE表达式 区分出 ()内的数据
                     index += 1
                     while index < len(sql_list):
                         if 'INSERT INTO' in sql_list[index] and table_name in sql_list[index]:
@@ -98,7 +98,6 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                             for item in result:
                                 temp = []
                                 str_list = item.split(', ')   #split ,后面加个空格，防止内容里有空格
-
                                 for index_str in range(len(str_list)):
                                     if index_str in col_list:
                                         str_temp = str_list[index_str]
@@ -137,8 +136,6 @@ def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarr
         temp_list = []
         sub_sets.append(temp_list)
 
-    print(origin_data_set.shape[0])
-
     for index in range(origin_data_set.shape[0]):
         h1 = hmac.new(str(int(origin_data_set[index][0])).encode('utf-8'), secret_key.encode('utf-8'), digestmod='MD5').hexdigest()
         h2 = hmac.new(secret_key.encode('utf-8'), h1.encode('utf-8'), digestmod='MD5').hexdigest()
@@ -153,7 +150,7 @@ def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarr
     for item in sub_sets:
         result_list.append(np.asarray(item))
 
-    return result_list
+    return np.asarray(result_list)
 
 #param3 允许误差  FLOAT，比如 0.03 表示 可以在单个值嵌入 3%以内的误差
 #param4 
@@ -167,37 +164,79 @@ def embed_watermark_bit(bit_val:int, sub_dataset:ndarray, permit_distortion:floa
         
     return sub_dataset
 
+#单个加水印数据集的最小数量
+MIN_DATASET_SIZE = 150
+#单个加水印的BIT位的最小冗余组数量
+MIN_BIT_RUDENT = 3
 
-MIN_DATASET_SIZE = 100
-PARTITION_MARK_MIN_RATE = 5  #算法种 m >> l(len of watermark)  涉及解码投票，需为奇
+def check_data_min_size(watermark:str, dataset_size:int):
+    bin_list = str_2_bin(watermark)
+
+    watermark_len = len(bin_list)
+
+    if watermark_len * MIN_DATASET_SIZE * MIN_BIT_RUDENT < dataset_size:
+        return False
+    
+    return True
+
 #加入水印
 def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
-
+    #实际上只目前只会执行一次FOR循环
     for item in input_matrix:
         #step0 计算data set分段数量
         binarr = str_2_bin(watermark)
         watermark_len = len(binarr)
         dataset_origin:ndarray = input_matrix[item]
 
-        partition_nums = len(binarr) * PARTITION_MARK_MIN_RATE
+        if check_data_min_size(watermark, dataset_origin.shape[0]) == False:
+            print('!!!!!! [%s] dataset size is too small, short your watermark or insert more data 2 handle' % (item))
+            continue
+        
+        partition_nums = watermark_len * MIN_BIT_RUDENT
 
         #step1 将数据集分组
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
 
+        #误差范围
+        constrain_set = [[0, 0.3], [0.3, 0.7], [0.7, 1]]
+        #记录最小和最大的值，用于计算T*阈值
+        min_list = []
+        max_list = []
+        #初始化空的NUMPY数组  用于返回值
+        result_vals = np.empty((0, 2))
         #step2 将水印按BIT位加入,水印只支持  数字 字母 + 常用字符 !等，从ASCII 33开始，保证至少为6位
-        
         for index in range(len(sub_dataset)):
+            #sub_arr  [[a, b], [c, d], [e, f]]
             sub_arr:ndarray = sub_dataset[index]
-            
-            '''
+                
             #对于超过最小值下限的数据集才嵌入水印，控制误差
             if sub_arr.shape[0] > MIN_DATASET_SIZE:
                 slot = int(index % watermark_len)
-                embed_watermark_bit(binarr[slot], sub_dataset[index])
-            '''
-        
-        
+                #输入第二列数据
+                addtion_vector, x_min_max = alg.count_insert_vector(binarr[slot], alg.DISTORTION_TYPE, sub_arr[:,1], constrain_set)
+                #最终的回写数据
+                sub_arr[:,1] = sub_arr[:,1] + addtion_vector
+
+                if int(binarr[slot]) == 0:
+                    min_list.append(x_min_max)
+                else:
+                    max_list.append(x_min_max)
+
+                result_vals = np.append(result_vals, sub_arr)
+
+        #step 2.1 计算阈值T*
+        min_x, min_y = alg.convert_data_into_xy(np.asarray(min_list))
+        gauss_min_mean, gauss_min_mean_sqrt = alg.count_gauss_distribute_params(min_x, min_y, np.mean(min_x), np.var(min_x))
+
+        max_x, max_y = alg.convert_data_into_xy(np.asarray(max_list))
+        gauss_max_mean, gauss_max_mean_sqrt = alg.count_gauss_distribute_params(max_x, max_y, np.mean(max_x), np.var(max_x))
+
+        threash_hold = alg.count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
+
+        print('------------- threash = [%f]' % (threash_hold))
         #step3 将水印数据反写回SQL文件
+        
+
 
 
 
@@ -210,13 +249,13 @@ if __name__ == "__main__":
     #入参应该包含需要添加水印的表+可插入误差的COL名(可多选)
     table_names = {}
     attrs = []
+    #暂时只支持对1个ATTR加水印
     attrs.append('id')  #列表第一个是主键
-    attrs.append('confidence')
     attrs.append('emotion')
     table_names['monitor_data_history'] = attrs
 
     result_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
-    waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'ab3')
+    waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
 
 

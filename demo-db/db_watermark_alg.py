@@ -164,7 +164,7 @@ REF_RATION = 0.5   #0-1   ref的系数  tail系数  REF越大  HIDING-FUNCTION�
 PATTERN_SEARCH_SHORT_RATION = 0.5   #在单论搜索最大/最小值失败后，步长的缩短系数
 PATTERN_SEARCH_LARGE_RATION = 2   #在单次的轴搜索成功后，除了扩大模式范围，同时也增加搜索步长倍数
 PATTERN_SEARCH_INIT_ADD_SPEED = 3  # >= 1
-PATTERN_SEARCH_PRECISION = 0.000001  #模式搜索最小的精度，|a-b|差值小于该值认为a == b
+PATTERN_SEARCH_PRECISION = 0.00000001  #模式搜索最小的精度，|a-b|差值小于该值认为a == b
 
 #兼顾效率和区分度，最佳的数据子集大小为200
 MIN_DATA_SET_PARTITION = 150
@@ -448,13 +448,18 @@ def convert_data_into_xy(data_vector:ndarray):
       fit_precision = 0.01
       fit_bits= 2 #位数,和精度一起修改
 
-      for index in range((int)(1/fit_precision)):
+      precision_val = (int)(1/fit_precision)
+      
+      for index in range(precision_val):
             x_list.append(round(fit_precision * index, fit_bits))
             y_list.append(0)
 
       for item in data_vector:
-            slot = int(round(item, fit_bits) * (int)(1/fit_precision) % (int)(1/fit_precision) )
+            slot = int(round(item, fit_bits) * precision_val % precision_val)
             y_list[slot] = y_list[slot] + 1
+      
+      #计算离散数据的概率密度
+
 
       return np.asarray(x_list), np.asarray(y_list)
 
@@ -471,80 +476,84 @@ def decode_bit_from_partition(thresh_hold:float, data_vector:ndarray):
       return result
 
 
-#约束集暂时按最大最小 这里按百分比的绝对值给出
-constrain_set = [-0.05, 0.05]
-
-#constrain_set = [[0, 5], [5, 11], [11, 20]]
 
 
-max_list = []
-min_list = []
+if __name__ == "__main__":
 
-max_result_list = []
-min_result_list = []
+      #约束集暂时按最大最小 这里按百分比的绝对值给出
+      constrain_set = [-0.05, 0.05]
 
-for index_1 in range(100):
-      #暂时使用同源数据
-      data_vector_min = []
-      for index in range(MIN_DATA_SET_PARTITION):
-            data_vector_min.append(random.uniform(1, 20))
-      
-      data_vector_max = []
-      for index in range(MIN_DATA_SET_PARTITION):
-            data_vector_max.append(random.uniform(1, 20))
-      
-
-      delta_vetor_min, Xmin = count_insert_vector(0, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
-      min_list.append(Xmin)
-      #保存计算后的数据，用于验证
-      min_result_list.append(np.asarray(data_vector_min) + delta_vetor_min)
-
-      delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_max) , constrain_set)
-      max_list.append(Xmax)
-
-      #保存计算后的数据，用于验证
-      max_result_list.append(np.asarray(data_vector_max) + delta_vetor_max)
-
-      print('--------------- sample [%d] min = [%f] max = [%f] ' % (index_1, Xmin, Xmax))
-      
-
-min_x, min_y = convert_data_into_xy(np.asarray(min_list))
-gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y, np.mean(min_x), np.var(min_x))
-
-max_x, max_y = convert_data_into_xy(np.asarray(max_list))
-gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y, np.mean(max_x), np.var(max_x))
-
-print('---------- gaussian min  mean[%f] var[%f]  || max mean[%f] var[%f] ' % (gauss_min_mean, gauss_min_mean_sqrt, gauss_max_mean, gauss_max_mean_sqrt))
-
-#绘制图像
-'''
-plt.plot(min_x,min_y,'b+:',label='bit_0')
-plt.plot(min_x,max_y,'c+:',label='bit_1')
-p_min = [gauss_min_mean, gauss_min_mean_sqrt]
-p_max = [gauss_max_mean, gauss_max_mean_sqrt]
-plt.plot(min_x,gaussian(min_x,*p_min),'ro:',label='fit_bit_0')
-plt.plot(min_x,gaussian(min_x,*p_max),'o:',label='fit_bit_1')
-plt.legend()
-plt.show()
-'''
-#绘制结束
-
-result = count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
+      #constrain_set = [[0, 5], [5, 11], [11, 20]]
 
 
-print('------------ thresh = [%f] min mean = [%f]  max mean = [%f]' % (result, np.mean(min_list), np.mean(max_list)))
+      max_list = []
+      min_list = []
 
-num0 = 0
-for index in range(len(min_result_list)):
-      bit_con = decode_bit_from_partition(result, min_result_list[index])
-      if bit_con == 0:
-            num0 += 1
+      max_result_list = []
+      min_result_list = []
 
-print('---------------------------- bit 0 results [%d] in [%d]' % (num0, len(min_result_list)))
+      for index_1 in range(50):
+            #暂时使用同源数据
+            data_vector_min = []
+            for index in range(MIN_DATA_SET_PARTITION):
+                  data_vector_min.append(random.uniform(0, 1))
 
-num1 = 0
-for index in range(len(max_result_list)):
-      bit_con = decode_bit_from_partition(result, max_result_list[index])
-      if bit_con == 1:
-            num1 += 1
-print('---------------------------- bit 1 results [%d] in [%d]' % (num1, len(max_result_list)))
+            data_vector_max = []
+            for index in range(MIN_DATA_SET_PARTITION):
+                  data_vector_max.append(random.uniform(0, 1))
+
+
+            delta_vetor_min, Xmin = count_insert_vector(0, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
+            min_list.append(Xmin)
+            #保存计算后的数据，用于验证
+            min_result_list.append(np.asarray(data_vector_min) + delta_vetor_min)
+
+            delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_max) , constrain_set)
+            max_list.append(Xmax)
+
+            #保存计算后的数据，用于验证
+            max_result_list.append(np.asarray(data_vector_max) + delta_vetor_max)
+
+            print('--------------- sample [%d] min = [%f] max = [%f] ' % (index_1, Xmin, Xmax))
+
+
+      min_x, min_y = convert_data_into_xy(np.asarray(min_list))
+      gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y, np.mean(min_x), np.var(min_x))
+
+      max_x, max_y = convert_data_into_xy(np.asarray(max_list))
+      gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y, np.mean(max_x), np.var(max_x))
+
+      print('---------- gaussian min  mean[%f] var[%f]  || max mean[%f] var[%f] ' % (gauss_min_mean, gauss_min_mean_sqrt, gauss_max_mean, gauss_max_mean_sqrt))
+
+      #绘制图像
+      '''
+      plt.plot(min_x,min_y,'b+:',label='bit_0')
+      plt.plot(min_x,max_y,'c+:',label='bit_1')
+      p_min = [gauss_min_mean, gauss_min_mean_sqrt]
+      p_max = [gauss_max_mean, gauss_max_mean_sqrt]
+      plt.plot(min_x,gaussian(min_x,*p_min),'ro:',label='fit_bit_0')
+      plt.plot(min_x,gaussian(min_x,*p_max),'o:',label='fit_bit_1')
+      plt.legend()
+      plt.show()
+      '''
+      #绘制结束
+
+      result = count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
+
+
+      print('------------ thresh = [%f] min mean = [%f]  max mean = [%f]' % (result, np.mean(min_list), np.mean(max_list)))
+
+      num0 = 0
+      for index in range(len(min_result_list)):
+            bit_con = decode_bit_from_partition(result, min_result_list[index])
+            if bit_con == 0:
+                  num0 += 1
+
+      print('---------------------------- bit 0 results [%d] in [%d]' % (num0, len(min_result_list)))
+
+      num1 = 0
+      for index in range(len(max_result_list)):
+            bit_con = decode_bit_from_partition(result, max_result_list[index])
+            if bit_con == 1:
+                  num1 += 1
+      print('---------------------------- bit 1 results [%d] in [%d]' % (num1, len(max_result_list)))
