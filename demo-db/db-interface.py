@@ -217,6 +217,6 @@ if __name__ == "__main__":
 
     result_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
-    waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'test360')
+    waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'ab3')
 
 

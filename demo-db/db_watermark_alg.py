@@ -430,9 +430,11 @@ def gaussian(x,*param):
     return np.exp(-(x - u) ** 2 / (2 * sig ** 2))/ ((sig * math.sqrt(2 * math.pi)))
 
 #计算一组统计数据的高斯分布参数
-def count_gauss_distribute_params(x_vector:ndarray, y_vector:ndarray):
+def count_gauss_distribute_params(x_vector:ndarray, y_vector:ndarray, init_mean:float, init_var:float):
       #正态分布的初始化的均值和方差数据
-      p0=[0.5, 0.75] 
+      p0=[]
+      p0.append(init_mean) 
+      p0.append(init_var) 
 
       popt, pcov = curve_fit(gaussian, x_vector, y_vector, p0)
 
@@ -444,7 +446,7 @@ def convert_data_into_xy(data_vector:ndarray):
       y_list = []
 
       fit_precision = 0.01
-      fit_bits= 2 #位数
+      fit_bits= 2 #位数,和精度一起修改
 
       for index in range((int)(1/fit_precision)):
             x_list.append(round(fit_precision * index, fit_bits))
@@ -481,7 +483,7 @@ min_list = []
 max_result_list = []
 min_result_list = []
 
-for index_1 in range(50):
+for index_1 in range(100):
       #暂时使用同源数据
       data_vector_min = []
       for index in range(MIN_DATA_SET_PARTITION):
@@ -507,10 +509,10 @@ for index_1 in range(50):
       
 
 min_x, min_y = convert_data_into_xy(np.asarray(min_list))
-gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y)
+gauss_min_mean, gauss_min_mean_sqrt = count_gauss_distribute_params(min_x, min_y, np.mean(min_x), np.var(min_x))
 
 max_x, max_y = convert_data_into_xy(np.asarray(max_list))
-gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y)
+gauss_max_mean, gauss_max_mean_sqrt = count_gauss_distribute_params(max_x, max_y, np.mean(max_x), np.var(max_x))
 
 print('---------- gaussian min  mean[%f] var[%f]  || max mean[%f] var[%f] ' % (gauss_min_mean, gauss_min_mean_sqrt, gauss_max_mean, gauss_max_mean_sqrt))
 
