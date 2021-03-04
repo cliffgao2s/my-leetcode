@@ -284,7 +284,7 @@ def pattern_search_optiom(optim_type:int, data_vector:ndarray, constrain_set:nda
                   break
             
             #change
-            step_len = 0.025 * step_ration
+            step_len = 0.05 * step_ration
             #进行轴搜索
             tao_temp_val, add_fix_vetctor = search_one_round(data_vector, addtion_vector, constrain_set, optim_type, step_len)
 
@@ -370,7 +370,21 @@ def count_insert_vector(optim_type:int, distortion_type:int, data_vector:ndarray
             return delta_vetor, X_max_min
 
       elif distortion_type == DISTORTION_TYPE:
-            pass
+            constrain_set_new = []
+
+            for index in range(data_vector.shape[0]):
+                  temp = []
+                  
+                  for item in constrain_set:
+                        if data_vector[index] <= item[1] and data_vector[index] >= item[0]:
+                              temp.append(item[0])
+                              temp.append(item[1])
+                              break
+                  constrain_set_new.append(temp)
+            
+            delta_vetor, X_max_min = pattern_search_optiom(optim_type, data_vector, np.asarray(constrain_set_new))
+
+            return delta_vetor, X_max_min
       else:
             print('distortion type no support, do nothing')
             return None, None
