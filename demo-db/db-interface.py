@@ -66,6 +66,7 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
         # 读取整个sql文件，以分号切割。[:-1]删除最后一个元素，也就是空字符串
         sql_list = f.read().split(';\n')[:-1]     #以 ; + 换行符 作为切割依据
         result_matrix = {}
+        attr_matrix = {}
         index = 0
 
         while index < len(sql_list):
@@ -121,12 +122,13 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                     #LIST转numpy
                     np_array = np.asarray(data_list, dtype=float)
                     result_matrix[table_name] = np_array
+                    attr_matrix[table_name] = col_list
                 else:
                     index += 1
             else:
                 index += 1
 
-        return result_matrix
+        return result_matrix, attr_matrix
 
 #切割数据集，根据secret-key
 def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarray):
@@ -213,8 +215,6 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         for index in range(len(sub_dataset)):
             #sub_arr  [[a, b], [c, d], [e, f]]
             sub_arr:ndarray = sub_dataset[index]
-            #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            print(sub_arr.shape)
                 
             #对于超过最小值下限的数据集才嵌入水印，控制误差
             if sub_arr.shape[0] > MIN_DATASET_SIZE:
@@ -243,8 +243,6 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         print('------------- threash = [%f]' % (threash_hold))
         outlist = []
         outlist.append(threash_hold)
-
-        print(result_vals.shape)
         outlist.append(result_vals)
 
         output_matrix[item] = outlist
@@ -254,7 +252,7 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
 
 
 #将修改完结果写入目标文件
-def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}):
+def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}, col_matrix : {}):
     fd = open(outfile, encoding='utf-8', mode='w+')
     fs = open(srcfile, encoding='utf-8', mode='r')
     
@@ -265,8 +263,9 @@ def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}):
         break
     
     fixlist:ndarray = output_matrix[key][1]
-
     fixlist = fixlist.reshape(int(fixlist.shape[0] / 2), 2)
+
+    col_list = col_matrix[key]
 
     while True:
         strline = fs.readline()
@@ -278,8 +277,20 @@ def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}):
                 for item in fixlist:
                     pkstr = '\'' + str(int(item[0])) + '\''
                     if pkstr in strline:
-                        
-                        
+                        str_list = strline.split(', ')
+
+                        strline_new = ''
+                        for index in range(len(str_list)):
+                            if index in col_list and index != 0:
+                                strline_new += '\'' + str(item[1]) + '\'' + ', '
+                            else:
+                                if index < len(str_list) - 1:
+                                    strline_new += str_list[index] + ', '
+                                else:
+                                    strline_new += str_list[index]
+
+                        fd.write(strline_new)
+
                         find_val = True
                         break
                 
@@ -295,11 +306,12 @@ def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}):
     fs.close()
 
 #抽取水印,返回所有可能的字母
-def waternark_extract_alg1(input_matrix : {}):
+def waternark_extract_alg1(srcfile: str, input_matrix : {}, params:[]):
     pass
 
 
 if __name__ == "__main__":
+    
     #入参应该包含需要添加水印的表+可插入误差的COL名(可多选)
     table_names = {}
     attrs = []
@@ -308,12 +320,30 @@ if __name__ == "__main__":
     attrs.append('emotion')
     table_names['monitor_data_history'] = attrs
 
-    result_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
+    #解析文件，读取需要修改的数据   +  表的ATTR索引
+    result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
     output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
 
-    write_result_2_file('\\yuqing_lite.sql', '\\yuqing_lite_out.sql', output_matrix)
+    write_result_2_file('\\yuqing_lite.sql', '\\yuqing_lite_out.sql', output_matrix, col_matrix)
+
+
+    '''
+    #解码水印步骤
+
+    params = []
+    #加入T*
+
+    #加入NUMS
+
+    #加入SECKEY
+
+
+    waternark_extract_alg1('\\yuqing_lite.sql', table_names, params)
+    '''
+
+
 
 
 
