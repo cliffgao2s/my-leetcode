@@ -85,8 +85,7 @@ val1[:,1] = val1[:,1] + np.asarray(add)
 print(val1)
 '''
 #===================================================================  验证NUMPY数组的初始化和合并
-val = np.empty((0,3))
-print(val)
+val = np.empty((0,0))
 
 v1 = np.array([1,2,3])
 v2 = np.array([4,5,6])
@@ -95,3 +94,8 @@ val = np.append(val, v1)
 val = np.append(val, v2)
 
 print(val)
+print(val.shape)
+
+val = val.reshape(2,3)
+print(val)
+print(val.shape)

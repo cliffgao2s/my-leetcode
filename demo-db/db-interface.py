@@ -194,7 +194,8 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
             print('!!!!!! [%s] dataset size is too small, short your watermark or insert more data 2 handle' % (item))
             continue
         
-        partition_nums = watermark_len * MIN_BIT_RUDENT
+        #因为HASH是不均匀的，所以需要减小数量，使得每个分段数量更接近大于最小值
+        partition_nums = int((watermark_len * MIN_BIT_RUDENT) / 1.2)
 
         #step1 将数据集分组
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
@@ -212,6 +213,8 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         for index in range(len(sub_dataset)):
             #sub_arr  [[a, b], [c, d], [e, f]]
             sub_arr:ndarray = sub_dataset[index]
+            #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            print(sub_arr.shape)
                 
             #对于超过最小值下限的数据集才嵌入水印，控制误差
             if sub_arr.shape[0] > MIN_DATASET_SIZE:
@@ -239,8 +242,10 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
 
         print('------------- threash = [%f]' % (threash_hold))
         outlist = []
-        outlist.append(result_vals)
         outlist.append(threash_hold)
+
+        print(result_vals.shape)
+        outlist.append(result_vals)
 
         output_matrix[item] = outlist
         
@@ -248,8 +253,46 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
     return output_matrix
 
 
+#将修改完结果写入目标文件
+def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}):
+    fd = open(outfile, encoding='utf-8', mode='w+')
+    fs = open(srcfile, encoding='utf-8', mode='r')
+    
+    #暂时只处理第一个
+    key = ''
+    for item in output_matrix:
+        key = item
+        break
+    
+    fixlist:ndarray = output_matrix[key][1]
 
+    fixlist = fixlist.reshape(int(fixlist.shape[0] / 2), 2)
 
+    while True:
+        strline = fs.readline()
+
+        if strline:
+            if 'INSERT INTO'  in strline and key in strline:
+                find_val = False
+                #修改数据写入
+                for item in fixlist:
+                    pkstr = '\'' + str(int(item[0])) + '\''
+                    if pkstr in strline:
+                        
+                        
+                        find_val = True
+                        break
+                
+                #如果没有修改数据则正是写入
+                if find_val == False:
+                    fd.write(strline)
+            else:
+                fd.write(strline)
+        else:
+            break
+
+    fd.close()
+    fs.close()
 
 #抽取水印,返回所有可能的字母
 def waternark_extract_alg1(input_matrix : {}):
@@ -270,7 +313,7 @@ if __name__ == "__main__":
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
     output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
 
-    print(output_matrix['monitor_data_history'][0])
+    write_result_2_file('\\yuqing_lite.sql', '\\yuqing_lite_out.sql', output_matrix)
 
 
 
