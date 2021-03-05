@@ -244,6 +244,7 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         outlist = []
         outlist.append(threash_hold)
         outlist.append(result_vals)
+        outlist.append(partition_nums)
 
         output_matrix[item] = outlist
         
@@ -305,9 +306,64 @@ def write_result_2_file(srcfile:str, outfile:str, output_matrix : {}, col_matrix
     fd.close()
     fs.close()
 
+def vote_for_bits(bin_list:[]):
+    vote_list = ''
+    for item in bin_list:
+        num1 = 0
+        num0 = 0
+
+        for item1 in item:
+            if item1 == 1:
+                num1 += 1
+            else:
+                num0 += 1
+        
+        if num1 > num0:
+            vote_list += '1'
+        else:
+            vote_list += '0'
+    
+    return vote_list
+
 #抽取水印,返回所有可能的字母
-def waternark_extract_alg1(srcfile: str, input_matrix : {}, params:[]):
-    pass
+def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str, thresh_hold:float, watermark_len:int):
+    bin_list = []
+
+    for index in range(watermark_len):
+        temp = []
+        bin_list.append(temp)
+
+    for item in input_matrix:
+        dataset_origin:ndarray = input_matrix[item]
+
+        #----------------------------------------------------------------------------------------------------
+        #step1 将数据集分组
+        sub_dataset = partition_data_set(partition_nums, secret_key, dataset_origin)
+
+        #----------------------------------------------------------------------------------------------------
+        #step2 分组解析BIT位数据
+        for index in range(len(sub_dataset)):
+            #sub_arr  [[a, b], [c, d], [e, f]]
+            sub_arr:ndarray = sub_dataset[index]
+                
+            #对于超过最小值下限的数据集才嵌入水印，控制误差
+            if sub_arr.shape[0] > MIN_DATASET_SIZE:
+                slot = int(index % watermark_len)
+
+                bit_con = alg.decode_bit_from_partition(thresh_hold, sub_arr[:,1])
+
+                slot_sub = bin_list[slot]
+                slot_sub.append(bit_con)
+                bin_list[slot] = slot_sub
+        #----------------------------------------------------------------------------------------------------
+        #step3 根据BIN LIST解析结果投票
+        
+        print(bin_list)
+
+        vote_list = vote_for_bits(bin_list)
+
+        return bin_2_str(vote_list)
+
 
 
 if __name__ == "__main__":
@@ -320,11 +376,14 @@ if __name__ == "__main__":
     attrs.append('emotion')
     table_names['monitor_data_history'] = attrs
 
+    '''
     #解析文件，读取需要修改的数据   +  表的ATTR索引
     result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
 
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
     output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
+
+    print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
 
     write_result_2_file('\\yuqing_lite.sql', '\\yuqing_lite_out.sql', output_matrix, col_matrix)
 
@@ -332,16 +391,12 @@ if __name__ == "__main__":
     '''
     #解码水印步骤
 
-    params = []
-    #加入T*
+    result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite_out.sql', table_names)
 
-    #加入NUMS
+    watermark_list = waternark_extract_alg1(result_matrix, 17, 'sxcqq1233aaa', 0.321841, 7)
 
-    #加入SECKEY
-
-
-    waternark_extract_alg1('\\yuqing_lite.sql', table_names, params)
-    '''
+    print(watermark_list)
+    
 
 
 
