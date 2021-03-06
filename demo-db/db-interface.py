@@ -62,73 +62,90 @@ def get_sub_attrs(str1):
 
 #对多个表加入水印,读取数据并返回需加水印数据的matrix
 def read_sqlfile_to_list(sqlfile, table_names : {}):
-    with open(sqlfile, encoding='utf-8', mode='r') as f:
+    fs = open(sqlfile, encoding='utf-8', mode='r')
+
+    result_matrix = {}
+    attr_matrix = {}
+    
+    data_list = []   #读出数据的结果集合
+    col_list = []    #表需要修改的属性字段索引值
+    table_name = ''  #表名
+    attr_list = []   #表需要修改的属性字段名
+
+    for item in table_names:
+        table_name = item
+        attr_list = table_names[item]
+        break
+
+    read_target_table = False
+    primary_key_index = 0
+
+    #改为按行读取，尝试读取大文件
+    while True:
         # 读取整个sql文件，以分号切割。[:-1]删除最后一个元素，也就是空字符串
-        sql_list = f.read().split(';\n')[:-1]     #以 ; + 换行符 作为切割依据
-        result_matrix = {}
-        attr_matrix = {}
-        index = 0
+        line = fs.readline()
 
-        while index < len(sql_list):
-            line = sql_list[index].replace('\n', '')
-            if 'CREATE TABLE' in line:
-                attr_list = get_sub_attrs(line)
-                if table_names[attr_list[0]] != None:
-                    #从attr_list 取出第一个参数，也就是表名，并REMOVE，这样attr_list剩下的就是表的字段名
-                    table_name = attr_list[0]
-                    attr_list.pop(0)
-                    #获取要处理的表项colunm名称
-                    attr_name_list = table_names[table_name]
-                    #预读取的数据LIST
-                    data_list = []
-                    col_list = []
-                    #找到ATTR-NAME对应的索引,0 = pk
-                    for item in attr_name_list:
-                        for index_attr in range(len(attr_list)):
-                            if item == attr_list[index_attr]:
-                                col_list.append(index_attr)
-                    
-                    primary_key_index = 0
-                    
-                    #从文件中将对应col数据读取入MATRIX
-                    #2种SQL导出文件，有可能 insert into 是分行，有可能都在1行, 通过RE表达式 区分出 ()内的数据
-                    index += 1
-                    while index < len(sql_list):
-                        if 'INSERT INTO' in sql_list[index] and table_name in sql_list[index]:
-                            result = re.findall('(?<=\().*?(?=\))', sql_list[index], flags=0)
-                            for item in result:
-                                temp = []
-                                str_list = item.split(', ')   #split ,后面加个空格，防止内容里有空格
-                                for index_str in range(len(str_list)):
-                                    if index_str in col_list:
-                                        str_temp = str_list[index_str]
-                                        str_temp = str_temp.replace(' ', '')
-                                        str_temp = str_temp.replace('\'', '')
-                                        if str_temp != 'null':
-                                            #主键保存为int类型
-                                            if primary_key_index == index_str:
-                                                temp.append(int(str_temp))
-                                            else:
-                                                temp.append(float(str_temp))
-                                        else:
-                                            break
-                                        #只有长度正常的数据才能计入
-                                        if len(temp) == len(col_list):
-                                            data_list.append(temp)
-                            index += 1
-                        else:
+        #按行读取
+        if line:
+            if 'CREATE TABLE' in line and table_name in line:
+                read_target_table = True
+                index_attr = 0
+
+                while True:
+                    line_sub = fs.readline()
+                    #读到 ; 属性结束退出
+                    if ';\n' in line_sub:
+                        break
+
+                    for index in range(len(attr_list)):
+                        if attr_list[index] in line_sub:
+                            col_list.append(index_attr)
+                            attr_list.pop(index)
                             break
+                    
+                    index_attr += 1
 
-                    #LIST转numpy
-                    np_array = np.asarray(data_list, dtype=float)
-                    result_matrix[table_name] = np_array
-                    attr_matrix[table_name] = col_list
-                else:
-                    index += 1
+            elif 'INSERT INTO' in line and table_name in line and read_target_table == True:         
+                #从文件中将对应col数据读取入MATRIX
+                #2种SQL导出文件，有可能 insert into 是分行，有可能都在1行, 通过RE表达式 区分出 ()内的数据
+                result = re.findall('(?<=\().*?(?=\))', line, flags=0)
+                for item in result:
+                    temp = []
+                    str_list = item.split(', ')   #split ,后面加个空格，防止内容里有空格
+                    for index_str in range(len(str_list)):
+                        if index_str in col_list:
+                            str_temp = str_list[index_str]
+                            str_temp = str_temp.replace(' ', '')
+                            str_temp = str_temp.replace('\'', '')
+                            if str_temp != 'null':
+                                #主键保存为int类型
+                                if primary_key_index == index_str:
+                                    temp.append(int(str_temp))
+                                else:
+                                    temp.append(float(str_temp))
+                            else:
+                                break
+                            #只有长度正常的数据才能计入
+                            if len(temp) == len(col_list):
+                                data_list.append(temp)
+            
             else:
-                index += 1
+                #后续退出条件，如果继续往下读表，出现了其他的CREATE TABLE  则退出读文件
+                if read_target_table == True and ('CREATE TABLE' in line and table_name not in line):
+                    break
 
-        return result_matrix, attr_matrix
+        else:
+            break
+    
+    #LIST转numpy
+    np_array = np.asarray(data_list, dtype=float)
+    result_matrix[table_name] = np_array
+    attr_matrix[table_name] = col_list
+
+    #释放文件句柄
+    fs.close()
+
+    return result_matrix, attr_matrix
 
 #切割数据集，根据secret-key
 def partition_data_set(partition_nums:int, secret_key:str, origin_data_set:ndarray):
@@ -376,16 +393,16 @@ if __name__ == "__main__":
     attrs.append('emotion')
     table_names['monitor_data_history'] = attrs
 
-    '''
+    
     #解析文件，读取需要修改的数据   +  表的ATTR索引
-    result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite.sql', table_names)
+    result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing.sql', table_names)
 
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
     output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
 
     print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
 
-    write_result_2_file('\\yuqing_lite.sql', '\\yuqing_lite_out.sql', output_matrix, col_matrix)
+    write_result_2_file('\\yuqing.sql', '\\yuqing_out.sql', output_matrix, col_matrix)
 
 
     '''
@@ -396,7 +413,7 @@ if __name__ == "__main__":
     watermark_list = waternark_extract_alg1(result_matrix, 17, 'sxcqq1233aaa', 0.321841, 7)
 
     print(watermark_list)
-    
+    '''
 
 
 
