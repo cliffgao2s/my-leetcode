@@ -169,7 +169,7 @@ PATTERN_SEARCH_PRECISION = 0.00000001  #模式搜索最小的精度，|a-b|差�
 #兼顾效率和区分度，最佳的数据子集大小为200
 MIN_DATA_SET_PARTITION = 150
 
-MIN_BIT_RUDENT = 6
+MIN_BIT_RUDENT = 5
 
 
 def count_hiding_function_val(combine_vector:ndarray):

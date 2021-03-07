@@ -386,9 +386,12 @@ if __name__ == "__main__":
     #误差范围
     constrain_set = [[0.0, 0.3], [0.3, 0.7], [0.7, 1.0]]
 
+    INFILE = '\\yuqing_lite.sql'
+    OUTFILE = '\\yuqing_lite_out.sql'
+
     
     #解析文件，读取需要修改的数据   +  表的ATTR索引
-    result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing.sql', table_names)
+    result_matrix, col_matrix = read_sqlfile_to_list(INFILE, table_names)
 
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
     output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a', constrain_set, alg.DISTORTION_TYPE)
@@ -396,18 +399,18 @@ if __name__ == "__main__":
     if len(output_matrix) > 0:
         print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
 
-        write_result_2_file('\\yuqing.sql', '\\yuqing_out.sql', output_matrix, col_matrix)
+        write_result_2_file(INFILE, OUTFILE, output_matrix, col_matrix)
 
 
-        '''
+        
         #解码水印步骤
 
-        result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite_out.sql', table_names)
+        result_matrix, col_matrix = read_sqlfile_to_list(OUTFILE, table_names)
 
         watermark_list = waternark_extract_alg1(result_matrix, 17, 'sxcqq1233aaa', 0.321841, 7)
 
         print(watermark_list)
-        '''
+        
     else:
         print('embed water mark failed')
 
