@@ -108,7 +108,9 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
             elif 'INSERT INTO' in line and table_name in line and read_target_table == True:         
                 #从文件中将对应col数据读取入MATRIX
                 #2种SQL导出文件，有可能 insert into 是分行，有可能都在1行, 通过RE表达式 区分出 ()内的数据
-                result = re.findall('(?<=\().*?(?=\))', line, flags=0)
+                #result = re.findall('(?<=\().*?(?=\))', line, flags=0)
+                result = re.findall('(?<=\().*?(?=\);)', line, flags=0)
+                #print(result)
                 for item in result:
                     temp = []
                     str_list = item.split(', ')   #split ,后面加个空格，防止内容里有空格
@@ -128,6 +130,7 @@ def read_sqlfile_to_list(sqlfile, table_names : {}):
                             #只有长度正常的数据才能计入
                             if len(temp) == len(col_list):
                                 data_list.append(temp)
+                                break
             
             else:
                 #后续退出条件，如果继续往下读表，出现了其他的CREATE TABLE  则退出读文件
@@ -183,23 +186,14 @@ def embed_watermark_bit(bit_val:int, sub_dataset:ndarray, permit_distortion:floa
         
     return sub_dataset
 
-#单个加水印数据集的最小数量
-MIN_DATASET_SIZE = 150
-#单个加水印的BIT位的最小冗余组数量
-MIN_BIT_RUDENT = 3
-
-def check_data_min_size(watermark:str, dataset_size:int):
-    bin_list = str_2_bin(watermark)
-
-    watermark_len = len(bin_list)
-
-    if watermark_len * MIN_DATASET_SIZE * MIN_BIT_RUDENT < dataset_size:
+def check_data_min_size(watermark_len:int, dataset_size:int):
+    if watermark_len * alg.MIN_DATA_SET_PARTITION * alg.MIN_BIT_RUDENT > dataset_size:
         return False
     
     return True
 
 #加入水印
-def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
+def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str, constrain_set:[], type:int):
     output_matrix = {}
 
     #实际上只目前只会执行一次FOR循环
@@ -209,20 +203,16 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
         watermark_len = len(binarr)
         dataset_origin:ndarray = input_matrix[item]
 
-        if check_data_min_size(watermark, dataset_origin.shape[0]) == False:
-            print('!!!!!! [%s] dataset size is too small, short your watermark or insert more data 2 handle' % (item))
+        if check_data_min_size(watermark_len, dataset_origin.shape[0]) == False:
+            print('!!!!!! [%s] dataset size [%d] is too small for watermarklen [%d], short your watermark or insert more data 2 handle' % (item, dataset_origin.shape[0], watermark_len))
             continue
         
         #因为HASH是不均匀的，所以需要减小数量，使得每个分段数量更接近大于最小值
-        partition_nums = int((watermark_len * MIN_BIT_RUDENT) / 1.2)
+        partition_nums = int((watermark_len * alg.MIN_BIT_RUDENT) / 1.2)
 
         #step1 将数据集分组
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
 
-        #误差范围
-        #constrain_set = [[0, 0.3], [0.3, 0.7], [0.7, 1]]
-
-        constrain_set = [-0.1, 0.1]
         #记录最小和最大的值，用于计算T*阈值
         min_list = []
         max_list = []
@@ -234,10 +224,10 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str):
             sub_arr:ndarray = sub_dataset[index]
                 
             #对于超过最小值下限的数据集才嵌入水印，控制误差
-            if sub_arr.shape[0] > MIN_DATASET_SIZE:
+            if sub_arr.shape[0] > alg.MIN_DATA_SET_PARTITION:
                 slot = int(index % watermark_len)
                 #输入第二列数据
-                addtion_vector, x_min_max = alg.count_insert_vector(binarr[slot], alg.DISTORTION_BOUND, sub_arr[:,1], constrain_set)
+                addtion_vector, x_min_max = alg.count_insert_vector(binarr[slot], type, sub_arr[:,1], constrain_set)
                 #最终的回写数据
                 sub_arr[:,1] = sub_arr[:,1] + addtion_vector
 
@@ -364,7 +354,7 @@ def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str
             sub_arr:ndarray = sub_dataset[index]
                 
             #对于超过最小值下限的数据集才嵌入水印，控制误差
-            if sub_arr.shape[0] > MIN_DATASET_SIZE:
+            if sub_arr.shape[0] > alg.MIN_DATA_SET_PARTITION:
                 slot = int(index % watermark_len)
 
                 bit_con = alg.decode_bit_from_partition(thresh_hold, sub_arr[:,1])
@@ -393,27 +383,33 @@ if __name__ == "__main__":
     attrs.append('emotion')
     table_names['monitor_data_history'] = attrs
 
+    #误差范围
+    constrain_set = [[0.0, 0.3], [0.3, 0.7], [0.7, 1.0]]
+
     
     #解析文件，读取需要修改的数据   +  表的ATTR索引
     result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing.sql', table_names)
 
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
-    output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a')
+    output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a', constrain_set, alg.DISTORTION_TYPE)
 
-    print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
+    if len(output_matrix) > 0:
+        print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
 
-    write_result_2_file('\\yuqing.sql', '\\yuqing_out.sql', output_matrix, col_matrix)
+        write_result_2_file('\\yuqing.sql', '\\yuqing_out.sql', output_matrix, col_matrix)
 
 
-    '''
-    #解码水印步骤
+        '''
+        #解码水印步骤
 
-    result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite_out.sql', table_names)
+        result_matrix, col_matrix = read_sqlfile_to_list('\\yuqing_lite_out.sql', table_names)
 
-    watermark_list = waternark_extract_alg1(result_matrix, 17, 'sxcqq1233aaa', 0.321841, 7)
+        watermark_list = waternark_extract_alg1(result_matrix, 17, 'sxcqq1233aaa', 0.321841, 7)
 
-    print(watermark_list)
-    '''
+        print(watermark_list)
+        '''
+    else:
+        print('embed water mark failed')
 
 
 
