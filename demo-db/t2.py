@@ -103,6 +103,7 @@ print(val.shape)
 '''
 
 #===================================================================
+'''
 def bin_2_str(bin_in):
       result_list = []
 
@@ -143,3 +144,22 @@ def bin_2_str(bin_in):
 
 
 print(bin_2_str('1100001'))
+'''
+#======================================================
+MIN_BIT_RUDENT = 3
+MIN_DATA_SET_PARTITION = 200
+
+def count_partitions(data_set_len:int, watermark_len:int):
+      if watermark_len * MIN_BIT_RUDENT * MIN_DATA_SET_PARTITION > data_set_len:
+            return 0
+
+      addtion_num = 2
+
+      while True:
+            if watermark_len * ( MIN_BIT_RUDENT + addtion_num)* MIN_DATA_SET_PARTITION < data_set_len:
+                   addtion_num += 2
+            else:
+                  return  watermark_len * MIN_BIT_RUDENT + addtion_num - 2
+
+
+print(count_partitions(10000, 7))
