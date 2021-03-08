@@ -1,4 +1,4 @@
-import sys, os, numpy as np, re, hmac
+import sys, os, numpy as np, re, hmac, time
 from numpy import ndarray
 import db_watermark_alg as alg
 
@@ -192,6 +192,10 @@ def check_data_min_size(watermark_len:int, dataset_size:int):
     
     return True
 
+#根据数据集长度和水印中的01数量计算适合的分组数量
+def count_partitions(data_set_len, watermark):
+    pass
+
 #加入水印
 def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str, constrain_set:[], type:int):
     output_matrix = {}
@@ -204,11 +208,11 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str, cons
         dataset_origin:ndarray = input_matrix[item]
 
         if check_data_min_size(watermark_len, dataset_origin.shape[0]) == False:
-            print('!!!!!! [%s] dataset size [%d] is too small for watermarklen [%d], short your watermark or insert more data 2 handle' % (item, dataset_origin.shape[0], watermark_len))
+            print('!!!!!! [%s] dataset size [%d] is too small for watermarklen [%d]  min [%d], short your watermark or insert more data 2 handle' % (item, dataset_origin.shape[0], watermark_len, watermark_len * alg.MIN_DATA_SET_PARTITION * alg.MIN_BIT_RUDENT))
             continue
         
-        #因为HASH是不均匀的，所以需要减小数量，使得每个分段数量更接近大于最小值
-        partition_nums = int((watermark_len * alg.MIN_BIT_RUDENT) / 1.2)
+        #HASH是不均匀的！
+        partition_nums = int(watermark_len * alg.MIN_BIT_RUDENT)
 
         #step1 将数据集分组
         sub_dataset = partition_data_set(partition_nums, secrect_key, dataset_origin)
@@ -224,16 +228,18 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str, cons
             sub_arr:ndarray = sub_dataset[index]
                 
             #对于超过最小值下限的数据集才嵌入水印，控制误差
-            if sub_arr.shape[0] > alg.MIN_DATA_SET_PARTITION:
+            if sub_arr.shape[0] > alg.MIN_DATA_SET_PARTITION * 0.75:
                 slot = int(index % watermark_len)
                 #输入第二列数据
-                addtion_vector, x_min_max = alg.count_insert_vector(binarr[slot], type, sub_arr[:,1], constrain_set)
+                addtion_vector, x_min_max = alg.count_insert_vector(int(binarr[slot]), type, sub_arr[:,1], constrain_set)
                 #最终的回写数据
                 sub_arr[:,1] = sub_arr[:,1] + addtion_vector
 
-                if int(binarr[slot]) == 0:
+                if binarr[slot] == '0':
+                    print('---------- insert slot [%d] 0 val = [%f] mean = [%f]  add_mean = [%f]' % (slot, x_min_max, np.mean(sub_arr[:,1]), np.mean(addtion_vector)))
                     min_list.append(x_min_max)
                 else:
+                    print('---------- insert slot [%d] 1 val = [%f] mean = [%f]  add_mean = [%f]' % (slot, x_min_max, np.mean(sub_arr[:,1]), np.mean(addtion_vector)))
                     max_list.append(x_min_max)
 
                 result_vals = np.append(result_vals, sub_arr)
@@ -247,7 +253,6 @@ def waternark_embed_alg1(input_matrix : {}, secrect_key:str, watermark:str, cons
 
         threash_hold = alg.count_decode_thresh_hold(np.asarray(min_list), np.asarray(max_list), gauss_min_mean_sqrt, gauss_max_mean_sqrt, gauss_min_mean, gauss_max_mean)
 
-        print('------------- threash = [%f]' % (threash_hold))
         outlist = []
         outlist.append(threash_hold)
         outlist.append(result_vals)
@@ -353,8 +358,8 @@ def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str
             #sub_arr  [[a, b], [c, d], [e, f]]
             sub_arr:ndarray = sub_dataset[index]
                 
-            #对于超过最小值下限的数据集才嵌入水印，控制误差
-            if sub_arr.shape[0] > alg.MIN_DATA_SET_PARTITION:
+            #对于超过最小值下限的数据集才嵌入水印，控制误差  hash不均匀，加入个系数
+            if sub_arr.shape[0] > alg.MIN_DATA_SET_PARTITION * 0.75:
                 slot = int(index % watermark_len)
 
                 bit_con = alg.decode_bit_from_partition(thresh_hold, sub_arr[:,1])
@@ -362,6 +367,9 @@ def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str
                 slot_sub = bin_list[slot]
                 slot_sub.append(bit_con)
                 bin_list[slot] = slot_sub
+
+                print('+++++++++++ slot [%d] index [%d] mean [%f] thresh [%f]'  % (slot, index, np.mean(sub_arr[:,1]), thresh_hold))
+
         #----------------------------------------------------------------------------------------------------
         #step3 根据BIN LIST解析结果投票
         
@@ -384,35 +392,42 @@ if __name__ == "__main__":
     table_names['monitor_data_history'] = attrs
 
     #误差范围
-    constrain_set = [[0.0, 0.3], [0.3, 0.7], [0.7, 1.0]]
+    constrain_set = [[0, 0.3], [0.3, 0.7], [0.7, 1]]
+    #constrain_set = [-0.1, 0.1]
 
     INFILE = '\\yuqing_lite.sql'
     OUTFILE = '\\yuqing_lite_out.sql'
+    secret_key = 'sxcqq1233aaa'
+    water_mark = 'a'
 
-    
+    '''
+    print('--------------------------------EMBED-----------------------------------------------')
     #解析文件，读取需要修改的数据   +  表的ATTR索引
     result_matrix, col_matrix = read_sqlfile_to_list(INFILE, table_names)
 
     #输出 为字典，每个字典TUNPLE下是LIST 0 = 反写的NUMPY数组  1= 阈值
-    output_matrix = waternark_embed_alg1(result_matrix, 'sxcqq1233aaa', 'a', constrain_set, alg.DISTORTION_TYPE)
+    output_matrix = waternark_embed_alg1(result_matrix, secret_key, water_mark, constrain_set, alg.DISTORTION_TYPE)
 
-    if len(output_matrix) > 0:
-        print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
+    print('---------------- thresh [%f] nums [%d]' % (output_matrix['monitor_data_history'][0], output_matrix['monitor_data_history'][2]))
 
-        write_result_2_file(INFILE, OUTFILE, output_matrix, col_matrix)
+    write_result_2_file(INFILE, OUTFILE, output_matrix, col_matrix)
 
+    time.sleep(1.0)
+    '''
+    print('--------------------------------EXTRACT-----------------------------------------------')
 
+    #解码水印步骤
+
+    result_matrix, col_matrix = read_sqlfile_to_list(OUTFILE, table_names)
+
+    #watermark_list = waternark_extract_alg1(result_matrix, output_matrix['monitor_data_history'][2], secret_key, output_matrix['monitor_data_history'][0], len(str_2_bin(water_mark)))
+    
+    watermark_list = waternark_extract_alg1(result_matrix, 21, secret_key, 0.357046, 7)
+
+    print(watermark_list)
+    
         
-        #解码水印步骤
 
-        result_matrix, col_matrix = read_sqlfile_to_list(OUTFILE, table_names)
-
-        watermark_list = waternark_extract_alg1(result_matrix, 17, 'sxcqq1233aaa', 0.321841, 7)
-
-        print(watermark_list)
-        
-    else:
-        print('embed water mark failed')
 
 
 

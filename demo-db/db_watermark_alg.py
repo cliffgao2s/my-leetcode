@@ -167,9 +167,9 @@ PATTERN_SEARCH_INIT_ADD_SPEED = 3  # >= 1
 PATTERN_SEARCH_PRECISION = 0.00000001  #模式搜索最小的精度，|a-b|差值小于该值认为a == b
 
 #兼顾效率和区分度，最佳的数据子集大小为200
-MIN_DATA_SET_PARTITION = 150
+MIN_DATA_SET_PARTITION = 200
 
-MIN_BIT_RUDENT = 5
+MIN_BIT_RUDENT = 3
 
 
 def count_hiding_function_val(combine_vector:ndarray):
@@ -197,6 +197,7 @@ def count_hiding_function_val(combine_vector:ndarray):
             sum += 1 - 1 / (1 + pow(math.e, param_alpha * (combine_vector[index] - ref_val)))
 
       return sum / combine_vector.shape[0]
+      
 
 def search_one_round(data_vector:ndarray, addtion_vector:ndarray, constrain_set:ndarray, direction_type:int, forward_len:float):
       #此处用的应该是sqrt均方差，而不是var方差
@@ -422,7 +423,7 @@ def count_decode_thresh_hold(x_min:ndarray, x_max:ndarray, mean_sqr_err_0:float,
       #优化过程，暂时先增加处理，如果result因精度原因没有落在MIN MAX之间，则简单计算
       if result <= np.mean(x_min) or result >= np.mean(x_max):
             print('!!!!!!!! T* not corect [%f]!!!!!' % (result))
-            result = np.mean(x_min) + (np.mean(x_max) - np.mean(x_min)) * (prob_0 / (prob_0 + prob_1))
+            result = np.mean(x_min) + (np.mean(x_max) - np.mean(x_min)) * 0.33 * (1 +  (prob_0 / (prob_0 + prob_1)))
             print('!!!!!!!! T* fix value  [%f]!!!!!' % (result))
 
       return result
@@ -485,9 +486,9 @@ def decode_bit_from_partition(thresh_hold:float, data_vector:ndarray):
 if __name__ == "__main__":
 
       #约束集暂时按最大最小 这里按百分比的绝对值给出
-      constrain_set = [-0.05, 0.05]
+      #constrain_set = [-0.05, 0.05]
 
-      #constrain_set = [[0, 5], [5, 11], [11, 20]]
+      constrain_set = [[0, 5], [5, 11], [11, 15], [15, 20]]
 
 
       max_list = []
@@ -500,19 +501,19 @@ if __name__ == "__main__":
             #暂时使用同源数据
             data_vector_min = []
             for index in range(MIN_DATA_SET_PARTITION):
-                  data_vector_min.append(random.uniform(0, 1))
+                  data_vector_min.append(random.uniform(0, 20))
 
             data_vector_max = []
             for index in range(MIN_DATA_SET_PARTITION):
-                  data_vector_max.append(random.uniform(0, 1))
+                  data_vector_max.append(random.uniform(0, 20))
 
 
-            delta_vetor_min, Xmin = count_insert_vector(0, DISTORTION_BOUND, np.asarray(data_vector_min) , constrain_set)
+            delta_vetor_min, Xmin = count_insert_vector(0, DISTORTION_TYPE, np.asarray(data_vector_min) , constrain_set)
             min_list.append(Xmin)
             #保存计算后的数据，用于验证
             min_result_list.append(np.asarray(data_vector_min) + delta_vetor_min)
 
-            delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_BOUND, np.asarray(data_vector_max) , constrain_set)
+            delta_vetor_max, Xmax = count_insert_vector(1, DISTORTION_TYPE, np.asarray(data_vector_max) , constrain_set)
             max_list.append(Xmax)
 
             #保存计算后的数据，用于验证

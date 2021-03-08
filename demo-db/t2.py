@@ -85,6 +85,7 @@ val1[:,1] = val1[:,1] + np.asarray(add)
 print(val1)
 '''
 #===================================================================  验证NUMPY数组的初始化和合并
+'''
 val = np.empty((0,0))
 
 v1 = np.array([1,2,3])
@@ -99,3 +100,46 @@ print(val.shape)
 val = val.reshape(2,3)
 print(val)
 print(val.shape)
+'''
+
+#===================================================================
+def bin_2_str(bin_in):
+      result_list = []
+
+      if bin_in[0] == '0':
+            return result_list
+
+      if len(bin_in) < 6:
+            return result_list
+
+      if len(bin_in) == 6:
+            return chr(int(bin_in, 2))
+
+      if len(bin_in) == 7:
+            return chr(int(bin_in, 2))
+
+      if bin_in[6] != '0':
+            #先按6BIT位切分
+            subArr1 = bin_in[0:6]
+            subArr2 = bin_2_str(bin_in[6:])
+
+            str1 = chr(int(subArr1, 2))
+            if len(subArr2) > 0:
+                  for item in subArr2:
+                        result_list.append(str1 + item)
+
+      if bin_in[7] != '0':
+            #再尝试7BIT切分
+            subArr1 = bin_in[0:7]
+            subArr2 = bin_2_str(bin_in[7:])
+
+            str1 = chr(int(subArr1, 2))
+            if len(subArr2) > 0:
+                  for item in subArr2:
+                        result_list.append(str1 + item)
+
+
+      return result_list
+
+
+print(bin_2_str('1100001'))
