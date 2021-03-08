@@ -146,6 +146,7 @@ def bin_2_str(bin_in):
 print(bin_2_str('1100001'))
 '''
 #======================================================
+'''
 MIN_BIT_RUDENT = 3
 MIN_DATA_SET_PARTITION = 200
 
@@ -163,3 +164,29 @@ def count_partitions(data_set_len:int, watermark_len:int):
 
 
 print(count_partitions(10000, 7))
+'''
+#=====================================================
+import base64
+
+def encap_rtn_datas(thresh:float, secrect:str, partition_nums:int, watermark:str):
+    result = ''
+    seprate_str = '|^|'
+
+    result += str(thresh) + seprate_str + secrect + seprate_str + str(partition_nums) + seprate_str + watermark
+
+    result = result.encode('utf-8')
+
+    return base64.b64encode(result)
+
+
+def decode_rtn_datas(input:str):
+    input1 = base64.b64decode(input).decode("utf-8")
+    seprate_str = '|^|'
+    strlist = input1.split(seprate_str)
+
+    return float(strlist[0]), strlist[1], int(strlist[2]), strlist[3]
+
+result = encap_rtn_datas(0.357046, 'sxcqq1233aaa', 21, 'a')
+
+print(result)
+print(decode_rtn_datas(result))

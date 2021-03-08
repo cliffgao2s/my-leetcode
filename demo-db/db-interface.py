@@ -1,4 +1,4 @@
-import sys, os, numpy as np, re, hmac, time
+import sys, os, numpy as np, re, hmac, time, base64
 from numpy import ndarray
 import db_watermark_alg as alg
 
@@ -288,10 +288,12 @@ def vote_for_bits(bin_list:[]):
     return vote_list
 
 #抽取水印,返回所有可能的字母
-def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str, thresh_hold:float, watermark_len:int):
+def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str, thresh_hold:float, watermark:str):
     print('--------------------------------EXTRACT-----------------------------------------------')
-    print('---------- partitions = [%d] seckey = [%s] thresh = [%f] watermarklen = [%d]' % (partition_nums, secret_key, thresh_hold, watermark_len))
+    print('---------- partitions = [%d] seckey = [%s] thresh = [%f] watermark = [%s]' % (partition_nums, secret_key, thresh_hold, watermark))
     bin_list = []
+
+    watermark_len = len(alg.str_2_bin(watermark))
 
     for index in range(watermark_len):
         temp = []
@@ -324,13 +326,35 @@ def waternark_extract_alg1(input_matrix : {}, partition_nums:int, secret_key:str
         #----------------------------------------------------------------------------------------------------
         #step3 根据BIN LIST解析结果投票
         
-        print(bin_list)
-
         vote_list = vote_for_bits(bin_list)
 
-        return alg.bin_2_str(vote_list)
+        origin_list = alg.str_2_bin(watermark)
+
+        positive_num = 0
+        #判断解析出水印和原水印的相关度
+        for index in range(len(vote_list)):
+            if vote_list[index] == origin_list[index]:
+                positive_num += 1
+
+        return str(int((positive_num / len(vote_list)) * 100)) + '%'
+
+def encap_rtn_datas(thresh:float, secrect:str, partition_nums:int, watermark:str):
+    result = ''
+    seprate_str = '|^|'
+
+    result += str(thresh) + seprate_str + secrect + seprate_str + str(partition_nums) + seprate_str + watermark
+
+    result = result.encode('utf-8')
+
+    return base64.b64encode(result)
 
 
+def decode_rtn_datas(input:str):
+    input1 = base64.b64decode(input).decode("utf-8")
+    seprate_str = '|^|'
+    strlist = input1.split(seprate_str)
+
+    return float(strlist[0]), strlist[1], int(strlist[2]), strlist[3]
 
 if __name__ == "__main__":
     
@@ -362,17 +386,21 @@ if __name__ == "__main__":
 
     write_result_2_file(INFILE, OUTFILE, output_matrix, col_matrix)
 
+    result_str = encap_rtn_datas(output_matrix['monitor_data_history'][0], secret_key, output_matrix['monitor_data_history'][2], water_mark)
 
+    print(result_str)
 
+    
     #解码水印步骤
 
     result_matrix, col_matrix = read_sqlfile_to_list(OUTFILE, table_names)
 
-    #watermark_list = waternark_extract_alg1(result_matrix, output_matrix['monitor_data_history'][2], secret_key, output_matrix['monitor_data_history'][0], len(alg.str_2_bin(water_mark)))
-    
-    watermark_list = waternark_extract_alg1(result_matrix, 21, secret_key, 0.357046, 7)
+    thresh_de, secret_de, partnums_de, watermark_de = decode_rtn_datas('MC4zNTcwNDZ8XnxzeGNxcTEyMzNhYWF8XnwyMXxefGE=')
 
-    print(watermark_list)
+    watermark_match_ration = waternark_extract_alg1(result_matrix, partnums_de, secret_de, thresh_de, watermark_de)
+    
+    print(watermark_match_ration)
+    
     
         
 
